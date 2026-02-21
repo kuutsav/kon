@@ -29,15 +29,21 @@ $ fd . | cut -d/ -f1 | sort | uniq -c | sort -rn
 
 Python 3.12+ and [uv](https://github.com/astral-sh/uv).
 
-### Install
+### Install (recommended)
+
+```bash
+uv tool install dot-coding-agent
+```
+
+This installs `dot` globally as a CLI tool.
+
+### Install from source (advanced)
 
 ```bash
 git clone <repository-url>
 cd dot
 uv tool install .
 ```
-
-This installs `dot` globally as a CLI tool.
 
 ### Run
 

@@ -194,16 +194,36 @@ UI (app.py)
 
 ## Supported Models
 
+Dot works well with local models exposed through an OpenAI-compatible `/v1` API (for example LM Studio).
+
+### Example on LM Studio
+
+To run a local model like `zai-org/glm-4.7-flash` from LM Studio:
+
+1. Start LM Studio's local server (`http://127.0.0.1:1234`).
+2. Load the model in LM Studio.
+3. Start Dot with the OpenAI Responses provider:
+
+```bash
+dot --provider openai-responses \
+  --base-url http://127.0.0.1:1234/v1 \
+  --model zai-org/glm-4.7-flash \
+  --api-key ""
+```
+
+### All Supported Providers
+
 | Model | Provider | Thinking | Vision |
 | ----- | -------- | -------- | ------ |
-| `glm-4.7` | ZhiPu | Yes | No |
-| `glm-5` | ZhiPu | Yes | No |
+| `zai-org/glm-4.7-flash` (local) | OpenAI Responses | Yes | No |
+| `glm-4.7` | ZhiPu (OpenAI Chat Completions) | Yes | No |
+| `glm-5` | ZhiPu (OpenAI Chat Completions) | Yes | No |
 | `claude-sonnet-4.5` | GitHub Copilot | Yes | Yes |
 | `claude-opus-4.5` | GitHub Copilot | Yes | Yes |
 | `claude-sonnet-4.6` | GitHub Copilot | Yes | Yes |
 | `claude-opus-4.6` | GitHub Copilot | Yes | Yes |
 | `gpt-5.3-codex` | GitHub Copilot | Yes | Yes |
-| `gpt-5.3-codex` | OpenAI Codex | Yes | Yes |
+| `gpt-5.3-codex` | OpenAI Codex Resposes | Yes | Yes |
 
 ## Configuration
 

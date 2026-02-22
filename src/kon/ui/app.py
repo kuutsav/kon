@@ -85,7 +85,7 @@ _PYPI_PACKAGE_NAME = _get_package_name()
 try:
     VERSION = version(_PYPI_PACKAGE_NAME)
 except PackageNotFoundError:
-    VERSION = "0.2.1"
+    VERSION = "0.2.2"
 
 _COPILOT_API_TYPES: frozenset[ApiType] = frozenset(
     {ApiType.GITHUB_COPILOT, ApiType.GITHUB_COPILOT_RESPONSES, ApiType.ANTHROPIC_COPILOT}

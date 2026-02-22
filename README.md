@@ -203,24 +203,30 @@ Kon works well with local models exposed through an OpenAI-compatible `/v1` API 
 
 ### Example on LM Studio
 
-To run a local model like `zai-org/glm-4.7-flash` from LM Studio:
-
-1. Start LM Studio's local server (`http://127.0.0.1:1234`).
-2. Load the model in LM Studio.
-3. Start Kon with the OpenAI Responses provider:
+To run a local model from LM Studio:
 
 ```bash
+# GLM-4.7-flash
 kon --provider openai-responses \
   --base-url http://127.0.0.1:1234/v1 \
   --model zai-org/glm-4.7-flash \
   --api-key ""
+
+# Qwen3-coder-next
+kon --provider openai-responses \
+  --base-url http://127.0.0.1:1234/v1 \
+  --model qwen/qwen3-coder-next \
+  --api-key ""
 ```
+
+For detailed configuration and performance benchmarks, see [LOCAL.md](LOCAL.md).
 
 ### All Supported Providers
 
 | Model (local=*) | Provider | Thinking | Vision |
 | ----- | -------- | -------- | ------ |
 | `*zai-org/glm-4.7-flash` | OpenAI Responses | Yes | No |
+| `*qwen/qwen3-coder-next` | OpenAI Responses | Yes | No |
 | `glm-4.7` | ZhiPu (OpenAI Completions) | Yes | No |
 | `glm-5` | ZhiPu (OpenAI Completions) | Yes | No |
 | `claude-sonnet-4.5` | GitHub Copilot | Yes | Yes |
@@ -228,7 +234,8 @@ kon --provider openai-responses \
 | `claude-sonnet-4.6` | GitHub Copilot | Yes | Yes |
 | `claude-opus-4.6` | GitHub Copilot | Yes | Yes |
 | `gpt-5.3-codex` | GitHub Copilot | Yes | Yes |
-| `gpt-5.3-codex` | OpenAI Codex Resposes | Yes | Yes |
+| `gpt-5.3-codex` | OpenAI Codex Responses | Yes | Yes |
+
 
 ## Configuration
 

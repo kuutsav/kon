@@ -743,6 +743,7 @@ def main():
         dest="resume_session",
         help="Resume a specific session by ID (full or unique prefix)",
     )
+    parser.add_argument("--version", action="version", version=f"kon {VERSION}")
     args = parser.parse_args()
 
     app = Kon(

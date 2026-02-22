@@ -145,7 +145,12 @@ Keybindings:
                 model_id=self._model,
                 thinking_level=self._thinking_level,
             )
-            self._session.append_model_change(model_provider, self._model)
+            model_base_url = (
+                selected_model.base_url
+                if selected_model
+                else (self._provider.config.base_url if self._provider else None)
+            )
+            self._session.append_model_change(model_provider, self._model, model_base_url)
             info_bar = self.query_one("#info-bar", InfoBar)
             info_bar.set_session_id(self._session.id[:8])
             info_bar.set_tokens(0, 0, 0, 0)
@@ -205,7 +210,7 @@ Keybindings:
         info_bar.set_model(model.id, model.provider)
 
         if self._session:
-            self._session.set_model(model.provider, model.id)
+            self._session.set_model(model.provider, model.id, model.base_url)
 
         chat.add_info_message(f"Model changed to {model.id} ({model.provider})")
 
@@ -223,7 +228,12 @@ Keybindings:
             model_id=self._model,
             thinking_level=self._thinking_level,
         )
-        self._session.append_model_change(model_provider, self._model)
+        model_base_url = (
+            selected_model.base_url
+            if selected_model
+            else (self._provider.config.base_url if self._provider else None)
+        )
+        self._session.append_model_change(model_provider, self._model, model_base_url)
 
         chat = self.query_one("#chat-log", ChatLog)
         info_bar = self.query_one("#info-bar", InfoBar)

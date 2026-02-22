@@ -187,7 +187,7 @@ def test_round_trip_session_properties(tmp_path, monkeypatch):
     )
 
     # Check initial values
-    assert session.model == ("anthropic", "claude-3-opus")
+    assert session.model == ("anthropic", "claude-3-opus", None)
     assert session.thinking_level == "high"
     assert session.name is None
 
@@ -204,7 +204,7 @@ def test_round_trip_session_properties(tmp_path, monkeypatch):
     assert session.session_file is not None
     loaded_session = Session.load(session.session_file)
 
-    assert loaded_session.model == ("openai", "gpt-4")
+    assert loaded_session.model == ("openai", "gpt-4", None)
     assert loaded_session.thinking_level == "low"
     assert loaded_session.name == "Test Session"
 
@@ -450,13 +450,13 @@ def test_round_trip_model_property_changes(tmp_path, monkeypatch):
 
     session = Session.create("/test/project", provider="openai", model_id="gpt-3.5")
 
-    assert session.model == ("openai", "gpt-3.5")
+    assert session.model == ("openai", "gpt-3.5", None)
 
     session.set_model("anthropic", "claude-3")
-    assert session.model == ("anthropic", "claude-3")
+    assert session.model == ("anthropic", "claude-3", None)
 
     session.set_model("google", "gemini-pro")
-    assert session.model == ("google", "gemini-pro")
+    assert session.model == ("google", "gemini-pro", None)
 
     # Add assistant message to trigger persistence
     session.append_message(AssistantMessage(content=[TextContent(text="Response")]))
@@ -464,7 +464,21 @@ def test_round_trip_model_property_changes(tmp_path, monkeypatch):
     # Load and verify latest model
     assert session.session_file is not None
     loaded_session = Session.load(session.session_file)
-    assert loaded_session.model == ("google", "gemini-pro")
+    assert loaded_session.model == ("google", "gemini-pro", None)
+
+
+def test_round_trip_model_base_url_persistence(tmp_path, monkeypatch):
+    monkeypatch.setattr("kon.session.Session.get_sessions_dir", lambda cwd: tmp_path)
+
+    session = Session.create("/test/project", provider="openai", model_id="gpt-3.5")
+    session.append_model_change("openai", "custom-model", "http://localhost:8080/v1")
+    session.append_message(AssistantMessage(content=[TextContent(text="Response")]))
+
+    assert session.model == ("openai", "custom-model", "http://localhost:8080/v1")
+
+    assert session.session_file is not None
+    loaded_session = Session.load(session.session_file)
+    assert loaded_session.model == ("openai", "custom-model", "http://localhost:8080/v1")
 
 
 def test_get_last_assistant_text_ignores_thinking_and_tools():

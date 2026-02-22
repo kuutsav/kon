@@ -175,17 +175,20 @@ class SessionUIMixin:
 
         model_info = session.model
         if model_info:
-            provider, model_id = model_info
+            provider, model_id, session_base_url = model_info
             self._model = model_id
 
             self._model_provider = provider
             restored_model = get_model(model_id, provider)
+            restored_base_url = session_base_url or (
+                restored_model.base_url if restored_model else None
+            )
             if restored_model and self._provider:
                 current_api_type = self._get_provider_api_type(self._provider)
                 if restored_model.api != current_api_type:
                     provider_config = ProviderConfig(
                         api_key=self._api_key,
-                        base_url=restored_model.base_url,
+                        base_url=restored_base_url,
                         model=model_id,
                         max_tokens=get_max_tokens(model_id),
                         thinking_level=self._thinking_level,
@@ -196,9 +199,11 @@ class SessionUIMixin:
                         chat.add_info_message(str(e), error=True)
                 else:
                     self._provider.config.model = model_id
-                    self._provider.config.base_url = restored_model.base_url
+                    self._provider.config.base_url = restored_base_url
             elif self._provider:
                 self._provider.config.model = model_id
+                if restored_base_url:
+                    self._provider.config.base_url = restored_base_url
 
             info_bar.set_model(model_id, provider)
 

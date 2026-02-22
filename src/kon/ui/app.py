@@ -217,16 +217,20 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             if self._session.entries:
                 model_info = self._session.model
                 if model_info:
-                    provider, self._model = model_info
+                    provider, self._model, session_base_url = model_info
                     self._model_provider = provider
+                    if self._base_url is None and session_base_url:
+                        self._base_url = session_base_url
                 self._thinking_level = self._session.thinking_level
         elif self._continue_recent:
             self._session = Session.continue_recent(self._cwd)
             if self._session.entries:
                 model_info = self._session.model
                 if model_info:
-                    provider, self._model = model_info
+                    provider, self._model, session_base_url = model_info
                     self._model_provider = provider
+                    if self._base_url is None and session_base_url:
+                        self._base_url = session_base_url
                 self._thinking_level = self._session.thinking_level
 
         model_info = get_model(self._model, self._model_provider)
@@ -272,7 +276,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 model_id=self._model,
                 thinking_level=self._thinking_level,
             )
-            self._session.append_model_change(model_provider, self._model)
+            self._session.append_model_change(model_provider, self._model, base_url)
 
         self._project_context = Context.load(self._cwd)
         # TODO: Surface self._project_context.skill_warnings in UI (e.g. chat info/error messages)

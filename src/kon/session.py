@@ -58,6 +58,7 @@ class ModelChangeEntry(EntryBase):
     type: Literal["model_change"] = "model_change"
     provider: str
     model_id: str
+    base_url: str | None = None
 
 
 class CompactionEntry(EntryBase):
@@ -241,13 +242,16 @@ class Session:
         self._append_entry(entry)
         return entry.id
 
-    def append_model_change(self, provider: str, model_id: str) -> str:
+    def append_model_change(
+        self, provider: str, model_id: str, base_url: str | None = None
+    ) -> str:
         entry = ModelChangeEntry(
             id=self._generate_entry_id(),
             parent_id=self._leaf_id,
             timestamp=_now_iso(),
             provider=provider,
             model_id=model_id,
+            base_url=base_url,
         )
         self._append_entry(entry)
         return entry.id
@@ -372,20 +376,25 @@ class Session:
         return self._initial_thinking_level
 
     @property
-    def model(self) -> tuple[str, str] | None:
+    def model(self) -> tuple[str, str, str | None] | None:
         for entry in reversed(self._entries):
             if isinstance(entry, ModelChangeEntry):
-                return (entry.provider, entry.model_id)
+                return (entry.provider, entry.model_id, entry.base_url)
 
         if self._initial_provider and self._initial_model_id:
-            return (self._initial_provider, self._initial_model_id)
+            return (self._initial_provider, self._initial_model_id, None)
         return None
 
-    def set_model(self, provider: str, model_id: str) -> None:
+    def set_model(self, provider: str, model_id: str, base_url: str | None = None) -> None:
         current = self.model
-        if current and current[0] == provider and current[1] == model_id:
+        if (
+            current
+            and current[0] == provider
+            and current[1] == model_id
+            and current[2] == base_url
+        ):
             return
-        self.append_model_change(provider, model_id)
+        self.append_model_change(provider, model_id, base_url)
 
     def set_thinking_level(self, thinking_level: str) -> None:
         if self.thinking_level == thinking_level:

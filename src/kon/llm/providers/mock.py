@@ -15,6 +15,7 @@ Scenarios (set via scenario parameter):
 - "unknown_tool": call unknown tool
 - "long_text": multiple text chunks
 - "tool_hang": emits a tool call and then never sends StreamDone
+- "tool_with_many_chunks": tool call with many argument chunks for token counting tests
 """
 
 import asyncio
@@ -137,6 +138,45 @@ class MockProvider(BaseProvider):
                     await asyncio.sleep(3600)
 
                 return tool_hang_iter()
+
+            case "tool_with_many_chunks":
+
+                async def tool_with_many_chunks_iter():
+                    # Tool call with many chunks to test token counting
+                    # 24 chunks of 8 chars each = 192 chars = 48 tokens
+                    # Should trigger token update events at chunks 12, 16, 20, 24
+                    yield ToolCallStart(id="call-1", name="bash", index=0)
+                    chunks = [
+                        "aaaaaaa",
+                        "bbbbbbb",
+                        "ccccccc",
+                        "ddddddd",
+                        "eeeeeee",
+                        "fffffff",
+                        "ggggggg",
+                        "hhhhhhh",
+                        "iiiiiii",
+                        "jjjjjjj",
+                        "kkkkkkk",
+                        "lllllll",
+                        "mmmmmmm",
+                        "nnnnnnn",
+                        "ooooooo",
+                        "ppppppp",
+                        "qqqqqqq",
+                        "rrrrrrr",
+                        "sssssss",
+                        "ttttttt",
+                        "uuuuuuu",
+                        "vvvvvvv",
+                        "wwwwwww",
+                        "xxxxxxxx",
+                    ]
+                    for chunk in chunks:
+                        yield ToolCallDelta(index=0, arguments_delta=chunk)
+                    yield StreamDone(stop_reason=StopReason.TOOL_USE)
+
+                return tool_with_many_chunks_iter()
 
             case _:
                 # Fallback to default

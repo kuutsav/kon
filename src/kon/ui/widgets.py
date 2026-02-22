@@ -206,6 +206,7 @@ class StatusLine(Horizontal):
         self._start_time: float | None = None
         self._tool_calls = 0
         self._show_exit_hint = False
+        self._streaming_token_count = 0
         self.add_class("status-line")
 
     def compose(self) -> ComposeResult:
@@ -226,6 +227,8 @@ class StatusLine(Horizontal):
             result.append(str(spinner_text), style=spinner_color)
         result.append(" Working...", style=dim_color)
         result.append(" (esc to interrupt)", style=dim_color)
+        if self._streaming_token_count > 20:
+            result.append(f" ↓{format_tokens(self._streaming_token_count)}", style=dim_color)
         return result
 
     def _format_complete_status(self) -> Text:
@@ -250,6 +253,7 @@ class StatusLine(Horizontal):
         self._status = status
 
         if status == "idle":
+            self._streaming_token_count = 0
             if old_status != "idle" and self._start_time is not None:
                 self.query_one("#status-text", Label).update(self._format_complete_status())
             elif old_status == "idle" and self._start_time is None:
@@ -258,10 +262,15 @@ class StatusLine(Horizontal):
             if old_status == "idle":
                 self._start_time = time.time()
                 self._tool_calls = 0
+                self._streaming_token_count = 0
             self.query_one("#status-text", Label).update(self._render_spinner())
 
     def increment_tool_calls(self) -> None:
         self._tool_calls += 1
+
+    def set_streaming_tokens(self, token_count: int) -> None:
+        self._streaming_token_count = token_count
+        self._update_spinner()
 
     def show_exit_hint(self) -> None:
         self._show_exit_hint = True

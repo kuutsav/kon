@@ -2,7 +2,7 @@
 default_provider = "openai-codex" # "zhipu", "github-copilot", "openai-codex"
 default_model = "gpt-5.3-codex"
 default_thinking_level = "high"
-tool_call_idle_timeout_seconds = 10
+tool_call_idle_timeout_seconds = 120
 system_prompt = """You are an expert coding assistant called `Kon`.
 You help users by reading, searching, executing commands, editing code, and writing new files.
 

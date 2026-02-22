@@ -101,6 +101,14 @@ class ToolArgsDeltaEvent:
 
 
 @dataclass
+class ToolArgsTokenUpdateEvent:
+    type: Literal["tool_args_token_update"] = "tool_args_token_update"
+    tool_call_id: str = ""
+    tool_name: str = ""
+    token_count: int = 0
+
+
+@dataclass
 class ToolEndEvent:
     type: Literal["tool_end"] = "tool_end"
     tool_call_id: str = ""
@@ -180,6 +188,7 @@ StreamEvent = (
     | TextEndEvent
     | ToolStartEvent
     | ToolArgsDeltaEvent
+    | ToolArgsTokenUpdateEvent
     | ToolEndEvent
     | ToolResultEvent
     | RetryEvent

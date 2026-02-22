@@ -260,7 +260,7 @@ Example:
 default_provider = "openai-codex"
 default_model = "gpt-5.3-codex"
 default_thinking_level = "high"
-tool_call_idle_timeout_seconds = 10
+tool_call_idle_timeout_seconds = 60
 system_prompt = """Your custom system prompt here"""
 
 [compaction]

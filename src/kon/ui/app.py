@@ -32,6 +32,7 @@ from ..events import (
     ThinkingDeltaEvent,
     ThinkingEndEvent,
     ThinkingStartEvent,
+    ToolArgsTokenUpdateEvent,
     ToolEndEvent,
     ToolResultEvent,
     ToolStartEvent,
@@ -620,6 +621,10 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                             chat.start_tool(name, id, "")
                             self._current_block_type = "tool_call"
                             status.increment_tool_calls()
+                            status.set_streaming_tokens(0)  # Reset token count for new tool
+
+                        case ToolArgsTokenUpdateEvent(token_count=tc):
+                            status.set_streaming_tokens(tc)
 
                         case ToolEndEvent(tool_call_id=id, display=display):
                             chat.update_tool_call_msg(id, display)

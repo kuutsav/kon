@@ -59,7 +59,7 @@ class LLMConfig(BaseModel):
     default_model: str
     default_thinking_level: str
     system_prompt: str
-    tool_call_idle_timeout_seconds: float = 10
+    tool_call_idle_timeout_seconds: float = 60
 
 
 class CompactionConfig(BaseModel):

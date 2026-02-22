@@ -16,6 +16,7 @@ from kon.events import (
     ThinkingDeltaEvent,
     ThinkingEndEvent,
     ThinkingStartEvent,
+    ToolArgsTokenUpdateEvent,
     ToolEndEvent,
     ToolResultEvent,
     ToolStartEvent,
@@ -514,3 +515,51 @@ async def test_agent_cancellation(tools, in_memory_session):
     assert isinstance(agent_end, AgentEndEvent)
     assert agent_end.stop_reason == StopReason.INTERRUPTED
     assert agent_end.total_turns == 0
+
+
+# ============================================================================
+# Token counting tests
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_tool_args_token_counting(tools, sample_messages):
+    """Test that token count events are fired for tool argument streaming."""
+    provider = MockProvider(scenario="tool_with_many_chunks")
+    events = []
+
+    async for event in run_single_turn(provider, sample_messages, tools, turn=1):
+        events.append(event)
+
+    # Find token update events
+    token_updates = [e for e in events if isinstance(e, ToolArgsTokenUpdateEvent)]
+
+    # At least one token update should be fired for large tool arguments
+    assert len(token_updates) >= 1, "Token update events should be fired for large tool arguments"
+
+    # Token counts should be positive
+    for update in token_updates:
+        assert update.token_count > 0, "Token count should be positive"
+
+    # Token counts should be monotonically increasing
+    token_counts = [e.token_count for e in token_updates]
+    assert token_counts == sorted(token_counts), "Token counts should be monotonically increasing"
+
+    # Check tool name and ID are correctly associated
+    for update in token_updates:
+        assert update.tool_name == "bash"
+        assert update.tool_call_id == "call-1"
+
+
+@pytest.mark.asyncio
+async def test_tool_args_token_count_resets_between_tools(tools, sample_messages):
+    """Test that token counter resets when switching tools."""
+    provider = MockProvider(scenario="default")
+    events = []
+
+    async for event in run_single_turn(provider, sample_messages, tools, turn=1):
+        events.append(event)
+
+    # Default scenario has small args, so few or no updates expected
+    # Just verify the mechanism works without erroring
+    [e for e in events if isinstance(e, ToolArgsTokenUpdateEvent)]

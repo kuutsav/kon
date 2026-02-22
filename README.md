@@ -213,11 +213,11 @@ dot --provider openai-responses \
 
 ### All Supported Providers
 
-| Model | Provider | Thinking | Vision |
+| Model (local=*) | Provider | Thinking | Vision |
 | ----- | -------- | -------- | ------ |
-| `zai-org/glm-4.7-flash` (local) | OpenAI Responses | Yes | No |
-| `glm-4.7` | ZhiPu (OpenAI Chat Completions) | Yes | No |
-| `glm-5` | ZhiPu (OpenAI Chat Completions) | Yes | No |
+| `*zai-org/glm-4.7-flash` | OpenAI Responses | Yes | No |
+| `glm-4.7` | ZhiPu (OpenAI Completions) | Yes | No |
+| `glm-5` | ZhiPu (OpenAI Completions) | Yes | No |
 | `claude-sonnet-4.5` | GitHub Copilot | Yes | Yes |
 | `claude-opus-4.5` | GitHub Copilot | Yes | Yes |
 | `claude-sonnet-4.6` | GitHub Copilot | Yes | Yes |

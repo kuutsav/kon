@@ -1,5 +1,6 @@
 # Kon
 
+![PyPI](https://img.shields.io/pypi/v/kon-coding-agent)
 ![Python Version](https://img.shields.io/badge/python-3.12%2B-blue)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
 
@@ -274,6 +275,6 @@ uv run pytest
   - Over time, I also want to give more preference to local LLMs I can run. `glm-4.7-flash` and `qwen-3-coder-next` look promising, so I may make decisions that do not necessarily optimize for SOTA paid models.
 - Kon also borrows ideas from [Amp](https://ampcode.com/), Claude Code, and other coding agents.
 
-## LICENCE
+## LICENSE
 
 MIT

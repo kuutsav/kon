@@ -199,24 +199,17 @@ UI (app.py)
 
 ## Supported Models
 
-Kon works well with local models exposed through an OpenAI-compatible `/v1` API (for example LM Studio).
+Kon works well with local models exposed through an OpenAI-compatible `/v1` API.
 
-### Example on LM Studio
+### Example using llama-server
 
-To run a local model from LM Studio:
+To run a local model using llama-server:
 
 ```bash
-# GLM-4.7-flash
-kon --provider openai-responses \
-  --base-url http://127.0.0.1:1234/v1 \
-  --model zai-org/glm-4.7-flash \
-  --api-key ""
+./llama-server -m <models-dir>/GLM-4.7-Flash-GGUF/GLM-4.7-Flash-Q4_K_M.gguf -n 8192 -c 64000
 
-# Qwen3-coder-next
-kon --provider openai-responses \
-  --base-url http://127.0.0.1:1234/v1 \
-  --model qwen/qwen3-coder-next \
-  --api-key ""
+# Then use Kon with:
+kon --model zai-org/glm-4.7-flash --provider openai --base-url http://localhost:8080/v1 --api-key ""
 ```
 
 For detailed configuration and performance benchmarks, see [LOCAL.md](LOCAL.md).

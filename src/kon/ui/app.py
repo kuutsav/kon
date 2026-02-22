@@ -4,8 +4,10 @@ import os
 import shutil
 import sys
 import time
+import tomllib
 from collections import deque
 from importlib.metadata import PackageNotFoundError, version
+from pathlib import Path
 from typing import ClassVar
 
 from rich.console import Console
@@ -66,7 +68,19 @@ from .session_ui import SessionUIMixin
 from .styles import STYLES
 from .widgets import InfoBar, QueueDisplay, StatusLine, format_path
 
-_PYPI_PACKAGE_NAME = "kon-coding-agent"
+
+def _get_package_name() -> str:
+    pyproject_path = Path(__file__).parent.parent.parent.parent / "pyproject.toml"
+    if pyproject_path.exists():
+        try:
+            data = tomllib.loads(pyproject_path.read_text())
+            return data["project"]["name"]
+        except Exception:
+            pass
+    return "kon-coding-agent"
+
+
+_PYPI_PACKAGE_NAME = _get_package_name()
 
 try:
     VERSION = version(_PYPI_PACKAGE_NAME)

@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import ClassVar
 
 from rich.console import Console
-from textual import on
+from textual import events, on
 from textual.app import App, ComposeResult
 from textual.binding import Binding
 
@@ -191,6 +191,12 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
     def _get_provider_api_type(self, provider: BaseProvider) -> ApiType:
         return _API_TYPE_BY_PROVIDER.get(type(provider), ApiType.OPENAI_COMPLETIONS)
+
+    @on(events.TextSelected)
+    def _on_text_selected(self) -> None:
+        selection = self.screen.get_selected_text()
+        if selection:
+            self.copy_to_clipboard(selection)
 
     def on_mount(self) -> None:
         if config.binaries.fd:

@@ -254,21 +254,25 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             thinking_level=self._thinking_level,
         )
 
+        provider_error: str | None = None
         try:
             self._provider = self._create_provider(api_type, provider_config)
         except ValueError as e:
-            chat = self.query_one("#chat-log", ChatLog)
-            chat.add_info_message(str(e), error=True)
-            return
+            provider_error = str(e)
 
-        valid_levels = self._provider.thinking_levels
-        if self._thinking_level not in valid_levels:
-            self._thinking_level = valid_levels[0] if valid_levels else "medium"
-            self._provider.set_thinking_level(self._thinking_level)
+        if self._provider:
+            valid_levels = self._provider.thinking_levels
+            if self._thinking_level not in valid_levels:
+                self._thinking_level = valid_levels[0] if valid_levels else "medium"
+                self._provider.set_thinking_level(self._thinking_level)
 
         if not self._continue_recent and not self._resume_session:
             selected_model = get_model(self._model, self._model_provider)
-            model_provider = selected_model.provider if selected_model else self._provider.name
+            model_provider = (
+                selected_model.provider
+                if selected_model
+                else (self._provider.name if self._provider else self._model_provider)
+            )
             self._model_provider = model_provider
             self._session = Session.create(
                 self._cwd,
@@ -276,7 +280,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 model_id=self._model,
                 thinking_level=self._thinking_level,
             )
-            self._session.append_model_change(model_provider, self._model, base_url)
+            if model_provider:
+                self._session.append_model_change(model_provider, self._model, base_url)
 
         self._project_context = Context.load(self._cwd)
         # TODO: Surface self._project_context.skill_warnings in UI (e.g. chat info/error messages)
@@ -289,6 +294,9 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             context_paths=[format_path(f.path) for f in self._project_context.agents_files],
             skill_paths=[format_path(s.file_path) for s in self._project_context.skills],
         )
+
+        if provider_error:
+            chat.add_info_message(provider_error, error=True)
 
         for warning in consume_config_warnings():
             chat.add_info_message(warning, warning=True)

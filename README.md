@@ -19,7 +19,7 @@ $ fd . | cut -d/ -f1 | sort | uniq -c | sort -rn
  108 kon
 ```
 
-[Kon](https://bleach.fandom.com/wiki/Kon) is inspired from Bleach, a artifical soul
+[Kon](https://bleach.fandom.com/wiki/Kon) is inspired from Bleach, a artificial soul
 
 ## Setup
 

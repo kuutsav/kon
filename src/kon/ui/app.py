@@ -289,23 +289,23 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
         # Create Agent once — it owns context + system prompt (stable across queries
         # for prompt-prefix caching on llama-server and similar engines).
-        assert self._provider is not None
-        assert self._session is not None
-        self._agent = Agent(
-            provider=self._provider,
-            tools=get_tools(DEFAULT_TOOLS),
-            session=self._session,
-            cwd=self._cwd,
-        )
-        # TODO: Surface self._agent.context.skill_warnings in UI
+        if self._provider is not None and self._session is not None:
+            self._agent = Agent(
+                provider=self._provider,
+                tools=get_tools(DEFAULT_TOOLS),
+                session=self._session,
+                cwd=self._cwd,
+            )
 
         chat = self.query_one("#chat-log", ChatLog)
         chat.add_session_info(VERSION)
 
-        chat.add_loaded_resources(
-            context_paths=[format_path(f.path) for f in self._agent.context.agents_files],
-            skill_paths=[format_path(s.file_path) for s in self._agent.context.skills],
-        )
+        if self._agent:
+            # TODO: Surface self._agent.context.skill_warnings in UI
+            chat.add_loaded_resources(
+                context_paths=[format_path(f.path) for f in self._agent.context.agents_files],
+                skill_paths=[format_path(s.file_path) for s in self._agent.context.skills],
+            )
 
         if provider_error:
             chat.add_info_message(provider_error, error=True)
@@ -587,10 +587,18 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         status = self.query_one("#status-line", StatusLine)
         info_bar = self.query_one("#info-bar", InfoBar)
 
-        if self._provider is None or self._session is None or self._agent is None:
+        if self._provider is None or self._session is None:
             chat.add_info_message("Agent not initialized")
             self._is_running = False
             return
+
+        if self._agent is None:
+            self._agent = Agent(
+                provider=self._provider,
+                tools=get_tools(DEFAULT_TOOLS),
+                session=self._session,
+                cwd=self._cwd,
+            )
 
         current_prompt = prompt
 

@@ -18,7 +18,6 @@ from textual.binding import Binding
 from kon import config, consume_config_warnings, update_available_binaries
 from kon.tools_manager import ensure_tools
 
-from ..context import Context
 from ..core.types import StopReason
 from ..events import (
     AgentEndEvent,
@@ -54,7 +53,7 @@ from ..llm import (
     is_openai_logged_in,
     resolve_provider_api_type,
 )
-from ..loop import Agent, AgentConfig
+from ..loop import Agent
 from ..session import Session
 from ..tools import DEFAULT_TOOLS, get_tools
 from ..update_check import get_newer_pypi_version
@@ -159,7 +158,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         self._provider: BaseProvider | None = None
         self._session: Session | None = None
         self._agent: Agent | None = None
-        self._project_context: Context | None = None
 
         self._pending_update_notice_version: str | None = None
         self._update_notice_shown = False
@@ -289,16 +287,24 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             if model_provider:
                 self._session.append_model_change(model_provider, self._model, base_url)
 
-        self._project_context = Context.load(self._cwd)
-        # TODO: Surface self._project_context.skill_warnings in UI (e.g. chat info/error messages)
-        # so skill load/validation issues are visible to users.
+        # Create Agent once — it owns context + system prompt (stable across queries
+        # for prompt-prefix caching on llama-server and similar engines).
+        assert self._provider is not None
+        assert self._session is not None
+        self._agent = Agent(
+            provider=self._provider,
+            tools=get_tools(DEFAULT_TOOLS),
+            session=self._session,
+            cwd=self._cwd,
+        )
+        # TODO: Surface self._agent.context.skill_warnings in UI
 
         chat = self.query_one("#chat-log", ChatLog)
         chat.add_session_info(VERSION)
 
         chat.add_loaded_resources(
-            context_paths=[format_path(f.path) for f in self._project_context.agents_files],
-            skill_paths=[format_path(s.file_path) for s in self._project_context.skills],
+            context_paths=[format_path(f.path) for f in self._agent.context.agents_files],
+            skill_paths=[format_path(s.file_path) for s in self._agent.context.skills],
         )
 
         if provider_error:
@@ -581,7 +587,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         status = self.query_one("#status-line", StatusLine)
         info_bar = self.query_one("#info-bar", InfoBar)
 
-        if self._provider is None or self._session is None:
+        if self._provider is None or self._session is None or self._agent is None:
             chat.add_info_message("Agent not initialized")
             self._is_running = False
             return
@@ -597,14 +603,12 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             if self._interrupt_requested:
                 self._cancel_event.set()
 
-            tools = get_tools(DEFAULT_TOOLS)
             model_info = get_model(self._model, self._model_provider)
-            agent_config = AgentConfig(
-                system_prompt=self._get_system_prompt(),
-                context_window=model_info.context_window if model_info else None,
-                max_output_tokens=model_info.max_tokens if model_info else None,
-            )
-            self._agent = Agent(self._provider, tools, self._session, agent_config)
+            self._agent.provider = self._provider
+            self._agent.session = self._session
+            self._agent.tools = get_tools(DEFAULT_TOOLS)
+            self._agent.config.context_window = model_info.context_window if model_info else None
+            self._agent.config.max_output_tokens = model_info.max_tokens if model_info else None
 
             status.set_status("working")
 

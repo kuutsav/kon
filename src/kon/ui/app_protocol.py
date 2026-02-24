@@ -1,6 +1,5 @@
-from typing import Protocol
+from typing import Any, Protocol
 
-from ..context import Context
 from ..llm import ApiType, BaseProvider, ProviderConfig
 from ..session import Session
 from .selection_mode import SelectionMode
@@ -20,7 +19,7 @@ class Kon(Protocol):
     _selection_mode: SelectionMode | None
     _provider: BaseProvider | None
     _session: Session | None
-    _project_context: Context | None
+    _agent: Any
 
     # Methods expected by mixins
     def exit(self) -> None: ...
@@ -32,4 +31,3 @@ class Kon(Protocol):
     # Methods expected by SessionUIMixin
     def _get_provider_api_type(self, provider: BaseProvider) -> ApiType: ...
     def _create_provider(self, api_type: ApiType, config: ProviderConfig) -> BaseProvider: ...
-    def _get_system_prompt(self) -> str: ...

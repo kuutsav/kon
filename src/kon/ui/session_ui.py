@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from ..context import Context
 from ..core.types import (
     AssistantMessage,
     ImageContent,
@@ -15,7 +14,6 @@ from ..core.types import (
     UserMessage,
 )
 from ..llm import ApiType, BaseProvider, ProviderConfig, get_max_tokens, get_model
-from ..loop import build_system_prompt
 from ..session import CompactionEntry, CustomMessageEntry, MessageEntry, Session
 from ..tools import tools_by_name
 from .chat import ChatLog
@@ -26,7 +24,7 @@ from .widgets import InfoBar, StatusLine, format_path
 class SessionUIMixin:
     # Attributes provided by the App subclass
     _cwd: str
-    _project_context: Context | None
+    _agent: Any
     _hide_thinking: bool
     _session: Session | None
     _current_block_type: str | None
@@ -43,8 +41,6 @@ class SessionUIMixin:
     # Methods from other mixins/main class
     def _get_provider_api_type(self, provider: BaseProvider) -> ApiType: ...
     def _create_provider(self, api_type: ApiType, config: ProviderConfig) -> BaseProvider: ...
-    def _get_system_prompt(self) -> str:
-        return build_system_prompt(self._cwd, self._project_context)
 
     def _extract_text_content(self, content: str | list[TextContent | ImageContent]) -> str:
         if isinstance(content, str):
@@ -220,10 +216,10 @@ class SessionUIMixin:
 
         chat.add_session_info(getattr(self, "VERSION", ""))
 
-        if self._project_context:
+        if self._agent:
             chat.add_loaded_resources(
-                context_paths=[format_path(f.path) for f in self._project_context.agents_files],
-                skill_paths=[format_path(s.file_path) for s in self._project_context.skills],
+                context_paths=[format_path(f.path) for f in self._agent.context.agents_files],
+                skill_paths=[format_path(s.file_path) for s in self._agent.context.skills],
             )
 
         self._render_session_entries(session)

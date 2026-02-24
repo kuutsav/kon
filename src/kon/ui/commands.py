@@ -6,7 +6,6 @@ from typing import TYPE_CHECKING, Any
 
 from kon import config
 
-from ..context import Context
 from ..core.compaction import generate_summary
 from ..core.types import AssistantMessage, ToolCall, ToolResultMessage
 from ..llm import (
@@ -43,7 +42,7 @@ class CommandsMixin:
     _api_key: str | None
     _provider: BaseProvider | None
     _session: Session | None
-    _project_context: Context | None
+    _agent: Any
     _is_running: bool
 
     # Methods from App - declared for type checking
@@ -59,7 +58,6 @@ class CommandsMixin:
 
         def _get_provider_api_type(self, provider: BaseProvider) -> ApiType: ...
         def _create_provider(self, api_type: ApiType, config: ProviderConfig) -> BaseProvider: ...
-        def _get_system_prompt(self) -> str: ...
 
     def _handle_command(self, text: str) -> bool:
         parts = text[1:].split(maxsplit=1)
@@ -242,8 +240,6 @@ Keybindings:
         self.run_worker(self._do_new_conversation(chat, info_bar, status), exclusive=False)
 
     async def _do_new_conversation(self, chat: ChatLog, info_bar, status) -> None:
-        from kon.context import Context
-
         await chat.remove_all_children()
 
         status.reset()
@@ -255,12 +251,12 @@ Keybindings:
 
         chat.add_session_info(getattr(self, "VERSION", ""))
 
-        self._project_context = Context.load(self._cwd)
-        # TODO: Surface self._project_context.skill_warnings in UI (e.g. chat info/error messages)
-        # so skill load/validation issues are visible to users.
+        self._agent.reload_context()
+        self._agent.session = self._session
+        # TODO: Surface self._agent.context.skill_warnings in UI
         chat.add_loaded_resources(
-            context_paths=[format_path(f.path) for f in self._project_context.agents_files],
-            skill_paths=[format_path(s.file_path) for s in self._project_context.skills],
+            context_paths=[format_path(f.path) for f in self._agent.context.agents_files],
+            skill_paths=[format_path(s.file_path) for s in self._agent.context.skills],
         )
 
         chat.add_info_message("Started new conversation")
@@ -510,7 +506,7 @@ Keybindings:
             chat.add_info_message("Session has no messages to export")
             return
 
-        system_prompt = self._get_system_prompt()
+        system_prompt = self._agent.system_prompt
         tools = get_tools(DEFAULT_TOOLS)
 
         provider_name = self._provider.name if self._provider else "unknown"
@@ -585,7 +581,7 @@ Keybindings:
 
         try:
             summary = await generate_summary(
-                self._session.all_messages, self._provider, system_prompt=self._get_system_prompt()
+                self._session.all_messages, self._provider, system_prompt=self._agent.system_prompt
             )
             self._session.append_compaction(
                 summary=summary,

@@ -46,14 +46,6 @@ from .turn import run_single_turn
 
 
 def build_system_prompt(cwd: str, context: Context | None = None) -> str:
-    """
-    Build the system prompt with tools, guidelines, context files, and skills.
-
-    Args:
-        cwd: Working directory
-        context: Pre-loaded context (agents files and skills). If None, will load fresh.
-    """
-
     now = datetime.now()
     date_time = now.strftime("%A, %B %d, %Y at %I:%M %p %Z").strip()
 
@@ -77,9 +69,6 @@ def build_system_prompt(cwd: str, context: Context | None = None) -> str:
 @dataclass
 class AgentConfig:
     max_turns: int | None = None
-    system_prompt: str | None = None
-    cwd: str | None = None
-    context: Context | None = None
     context_window: int | None = None
     max_output_tokens: int | None = None
 
@@ -90,13 +79,31 @@ class Agent:
         provider: BaseProvider,
         tools: list[BaseTool],
         session: Session,
+        cwd: str | None = None,
+        context: Context | None = None,
+        system_prompt: str | None = None,
         config: AgentConfig | None = None,
     ):
         self.provider = provider
         self.tools = tools
         self.session = session
         self.config = config or AgentConfig()
+        self._cwd = cwd or os.getcwd()
+        self._context = context or Context.load(self._cwd)
+        self._system_prompt = system_prompt or build_system_prompt(self._cwd, self._context)
         self._run_usage = Usage()
+
+    @property
+    def context(self) -> Context:
+        return self._context
+
+    @property
+    def system_prompt(self) -> str:
+        return self._system_prompt
+
+    def reload_context(self) -> None:
+        self._context = Context.load(self._cwd)
+        self._system_prompt = build_system_prompt(self._cwd, self._context)
 
     @property
     def messages(self) -> list[Message]:
@@ -131,10 +138,7 @@ class Agent:
         stop_reason = StopReason.STOP
         was_interrupted = False
 
-        # Build system prompt ONCE before the loop to enable prompt caching
-        # If we don't do this date_time might change during execution invalidating cache
-        cwd = self.config.cwd or os.getcwd()
-        system_prompt = self.config.system_prompt or build_system_prompt(cwd, self.config.context)
+        system_prompt = self._system_prompt
 
         try:
             max_turns = (
@@ -225,7 +229,7 @@ class Agent:
             return
 
         context_window = self.config.context_window or kon_config.agent.default_context_window
-        max_output = self.config.max_output_tokens or self.provider.config.max_tokens
+        max_output = self.config.max_output_tokens or self.provider.config.max_tokens or 0
         buffer_tokens = kon_config.compaction.buffer_tokens
 
         if not is_overflow(last_usage, context_window, max_output, buffer_tokens):

@@ -146,7 +146,8 @@ async def test_agent_system_prompt(tools, in_memory_session):
         provider,
         tools,
         in_memory_session,
-        config=AgentConfig(system_prompt="Custom system prompt", max_turns=1),
+        system_prompt="Custom system prompt",
+        config=AgentConfig(max_turns=1),
     )
 
     events = []
@@ -209,7 +210,7 @@ async def test_agent_custom_cwd(tools):
     provider = MockProvider(scenario="simple_text")
     session = Session.in_memory(cwd="/custom/path")
 
-    agent = Agent(provider, tools, session, config=AgentConfig(cwd="/custom/path"))
+    agent = Agent(provider, tools, session, cwd="/custom/path")
 
     events = []
     async for event in agent.run("Where am I?"):

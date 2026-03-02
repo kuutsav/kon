@@ -44,8 +44,9 @@ class OpenAICompletionsCompat:
     thinking_format: Literal["openai", "zai", "qwen"] = "openai"
 
 
-def _detect_compat(provider: str, base_url: str) -> OpenAICompletionsCompat:
+def _detect_compat(provider: str, base_url: str, model: str = "") -> OpenAICompletionsCompat:
     is_zai = provider == "zai" or provider == "zhipu" or "api.z.ai" in base_url
+    is_qwen = "qwen" in model.lower() or "qwq" in model.lower()
 
     if is_zai:
         return OpenAICompletionsCompat(
@@ -55,8 +56,16 @@ def _detect_compat(provider: str, base_url: str) -> OpenAICompletionsCompat:
             thinking_format="zai",
         )
 
-    return OpenAICompletionsCompat()
+    if is_qwen:
+        return OpenAICompletionsCompat(
+            supports_store=False,
+            supports_developer_role=False,
+            supports_reasoning_effort=False,
+            max_tokens_field="max_tokens",
+            thinking_format="qwen",
+        )
 
+    return OpenAICompletionsCompat()
 
 class OpenAICompletionsProvider(BaseProvider):
     name = "openai"
@@ -80,7 +89,7 @@ class OpenAICompletionsProvider(BaseProvider):
                 "Set OPENAI_API_KEY or ZAI_API_KEY environment variable."
             )
         self._client = AsyncOpenAI(api_key=api_key, base_url=config.base_url)
-        self._compat = _detect_compat(config.provider or "", config.base_url or "")
+        self._compat = _detect_compat(config.provider or "", config.base_url or "", config.model or "")
 
     async def _stream_impl(
         self,

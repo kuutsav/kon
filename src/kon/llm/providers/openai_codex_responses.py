@@ -95,19 +95,13 @@ class OpenAICodexResponsesProvider(BaseProvider):
             return f"{base}/responses"
         return f"{base}/codex/responses"
 
-    async def _stream_codex(
+    def _build_request_body(
         self,
-        *,
-        token: str,
-        account_id: str,
         messages: list[Message],
         system_prompt: str | None,
         tools: list[ToolDefinition] | None,
         temperature: float | None,
-        max_tokens: int | None,
-        llm_stream: LLMStream,
-    ) -> AsyncIterator[StreamPart]:
-        url = self._resolve_url()
+    ) -> dict[str, Any]:
         body: dict[str, Any] = {
             "model": self.config.model,
             "store": False,
@@ -119,6 +113,9 @@ class OpenAICodexResponsesProvider(BaseProvider):
             "tool_choice": "auto",
             "parallel_tool_calls": True,
         }
+
+        if self.config.session_id:
+            body["prompt_cache_key"] = self.config.session_id
 
         tool_payload = self._build_tools(tools)
         if tool_payload:
@@ -132,6 +129,9 @@ class OpenAICodexResponsesProvider(BaseProvider):
         if temp is not None:
             body["temperature"] = temp
 
+        return body
+
+    def _build_headers(self, token: str, account_id: str) -> dict[str, str]:
         headers = {
             "Authorization": f"Bearer {token}",
             "chatgpt-account-id": account_id,
@@ -141,6 +141,26 @@ class OpenAICodexResponsesProvider(BaseProvider):
             "content-type": "application/json",
             "User-Agent": "kon",
         }
+        if self.config.session_id:
+            headers["session_id"] = self.config.session_id
+            headers["conversation_id"] = self.config.session_id
+        return headers
+
+    async def _stream_codex(
+        self,
+        *,
+        token: str,
+        account_id: str,
+        messages: list[Message],
+        system_prompt: str | None,
+        tools: list[ToolDefinition] | None,
+        temperature: float | None,
+        max_tokens: int | None,
+        llm_stream: LLMStream,
+    ) -> AsyncIterator[StreamPart]:
+        url = self._resolve_url()
+        body = self._build_request_body(messages, system_prompt, tools, temperature)
+        headers = self._build_headers(token, account_id)
 
         current_text = ""
         current_thinking = ""
@@ -226,14 +246,21 @@ class OpenAICodexResponsesProvider(BaseProvider):
                             if isinstance(usage, dict):
                                 input_details = usage.get("input_tokens_details")
                                 cached = 0
+                                cache_write = int(usage.get("cache_write_tokens") or 0)
                                 if isinstance(input_details, dict):
                                     cached = int(input_details.get("cached_tokens") or 0)
+                                    cache_write = int(
+                                        input_details.get("cache_write_tokens")
+                                        or input_details.get("cache_creation_tokens")
+                                        or cache_write
+                                    )
                                 input_tokens = int(usage.get("input_tokens") or 0)
                                 non_cached_input = max(input_tokens - cached, 0)
                                 llm_stream._usage = Usage(
                                     input_tokens=non_cached_input,
                                     output_tokens=int(usage.get("output_tokens") or 0),
                                     cache_read_tokens=cached,
+                                    cache_write_tokens=cache_write,
                                 )
                             rid = response_obj.get("id")
                             if isinstance(rid, str):

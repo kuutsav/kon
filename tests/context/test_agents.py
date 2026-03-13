@@ -4,7 +4,7 @@ from kon.context.agents import (
     ContextFile,
     _find_git_root,
     _get_stop_directory,
-    _load_context_file_from_dir,
+    _load_context_from_dir,
     escape_xml,
     format_agents_files_for_prompt,
     load_agents_files,
@@ -95,7 +95,7 @@ class TestLoadContextFileFromDir:
     def test_loads_agents_md(self, tmp_path):
         (tmp_path / "AGENTS.md").write_text("# Project Guidelines")
 
-        result = _load_context_file_from_dir(tmp_path)
+        result = _load_context_from_dir(tmp_path)
 
         assert result is not None
         assert result.content == "# Project Guidelines"
@@ -104,7 +104,7 @@ class TestLoadContextFileFromDir:
     def test_loads_claude_md_fallback(self, tmp_path):
         (tmp_path / "CLAUDE.md").write_text("# Claude Guidelines")
 
-        result = _load_context_file_from_dir(tmp_path)
+        result = _load_context_from_dir(tmp_path)
 
         assert result is not None
         assert result.content == "# Claude Guidelines"
@@ -114,13 +114,13 @@ class TestLoadContextFileFromDir:
         (tmp_path / "AGENTS.md").write_text("# AGENTS content")
         (tmp_path / "CLAUDE.md").write_text("# CLAUDE content")
 
-        result = _load_context_file_from_dir(tmp_path)
+        result = _load_context_from_dir(tmp_path)
 
         assert result is not None
         assert "AGENTS content" in result.content
 
     def test_no_context_file(self, tmp_path):
-        result = _load_context_file_from_dir(tmp_path)
+        result = _load_context_from_dir(tmp_path)
 
         assert result is None
 
@@ -128,7 +128,7 @@ class TestLoadContextFileFromDir:
         agents_dir = tmp_path / "AGENTS.md"
         agents_dir.mkdir()
 
-        result = _load_context_file_from_dir(tmp_path)
+        result = _load_context_from_dir(tmp_path)
 
         assert result is None
 

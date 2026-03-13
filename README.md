@@ -230,7 +230,9 @@ kon --model zai-org/glm-4.7-flash \
 | `claude-sonnet-4.6` | GitHub Copilot | Yes | Yes |
 | `claude-opus-4.6` | GitHub Copilot | Yes | Yes |
 | `gpt-5.3-codex` | GitHub Copilot | Yes | Yes |
+| `gpt-5.4` | GitHub Copilot | Yes | Yes |
 | `gpt-5.3-codex` | OpenAI Codex Responses | Yes | Yes |
+| `gpt-5.4` | OpenAI Codex Responses | Yes | Yes |
 
 
 ## Configuration
@@ -254,7 +256,7 @@ Example:
 ```toml
 [llm]
 default_provider = "openai-codex"
-default_model = "gpt-5.3-codex"
+default_model = "gpt-5.4"
 default_thinking_level = "high"
 tool_call_idle_timeout_seconds = 60
 system_prompt = """Your custom system prompt here"""

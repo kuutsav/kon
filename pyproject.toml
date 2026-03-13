@@ -37,7 +37,6 @@ dev = [
  "twine>=5.1.1",
 ]
 
-
 [project.scripts]
 kon = "kon.ui.app:main"
 

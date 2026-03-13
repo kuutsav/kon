@@ -14,9 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from kon import CONFIG_DIR_NAME, get_config_dir
-
-from .shared import escape_xml
+from .. import CONFIG_DIR_NAME, escape_xml, get_config_dir
 
 MAX_NAME_LENGTH = 64
 MAX_DESCRIPTION_LENGTH = 1024
@@ -24,15 +22,14 @@ MAX_DESCRIPTION_LENGTH = 1024
 
 @dataclass
 class Skill:
+    path: str
     name: str
     description: str
-    file_path: str
-    base_dir: str
 
 
 @dataclass
 class SkillWarning:
-    skill_path: str
+    path: str
     message: str
 
 
@@ -122,9 +119,7 @@ def _load_skill_from_dir(skill_dir: Path) -> tuple[Skill | None, list[SkillWarni
         if not description or not description.strip():
             return None, warnings
 
-        skill = Skill(
-            name=name, description=description, file_path=file_path, base_dir=str(skill_dir)
-        )
+        skill = Skill(name=name, description=description, path=file_path)
         return skill, warnings
 
     except Exception as e:
@@ -178,9 +173,9 @@ def load_skills(cwd: str | None = None) -> LoadSkillsResult:
             if skill.name in skill_map:
                 all_warnings.append(
                     SkillWarning(
-                        skill.file_path,
+                        skill.path,
                         f'name collision: "{skill.name}" already loaded '
-                        f"from {skill_map[skill.name].file_path}",
+                        f"from {skill_map[skill.name].path}",
                     )
                 )
             else:
@@ -209,7 +204,7 @@ def format_skills_for_prompt(skills: list[Skill]) -> str:
         lines.append("<skill>")
         lines.append(f"<name>{escape_xml(skill.name)}</name>")
         lines.append(f"<description>{escape_xml(skill.description)}</description>")
-        lines.append(f"<location>{escape_xml(skill.file_path)}</location>")
+        lines.append(f"<location>{escape_xml(skill.path)}</location>")
         lines.append("</skill>")
 
     lines.append("</available_skills>")

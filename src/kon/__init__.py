@@ -10,6 +10,7 @@ from kon.config import (
     set_config,
     update_available_binaries,
 )
+from kon.shared import escape_xml
 
 
 class _ConfigProxy:
@@ -27,6 +28,7 @@ __all__ = [
     "Config",
     "config",
     "consume_config_warnings",
+    "escape_xml",
     "get_config",
     "get_config_dir",
     "reload_config",

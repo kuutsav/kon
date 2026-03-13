@@ -29,7 +29,7 @@ class Context:
             cwd=cwd,
             agents_files=agents_files,
             skills=skills_result.skills,
-            skill_warnings=[(w.skill_path, w.message) for w in skills_result.warnings],
+            skill_warnings=[(w.path, w.message) for w in skills_result.warnings],
         )
 
     def reload(self) -> None:
@@ -38,4 +38,4 @@ class Context:
 
         self.agents_files = agents_files
         self.skills = skills_result.skills
-        self.skill_warnings = [(w.skill_path, w.message) for w in skills_result.warnings]
+        self.skill_warnings = [(w.path, w.message) for w in skills_result.warnings]

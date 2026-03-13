@@ -256,7 +256,7 @@ Keybindings:
         # TODO: Surface self._agent.context.skill_warnings in UI
         chat.add_loaded_resources(
             context_paths=[format_path(f.path) for f in self._agent.context.agents_files],
-            skill_paths=[format_path(s.file_path) for s in self._agent.context.skills],
+            skill_paths=[format_path(s.path) for s in self._agent.context.skills],
         )
 
         chat.add_info_message("Started new conversation")

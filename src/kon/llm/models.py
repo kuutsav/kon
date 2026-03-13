@@ -9,6 +9,8 @@ API type, and any special handling (e.g., vision fallback model).
 from dataclasses import dataclass
 from enum import Enum
 
+DEFAULT_MAX_TOKENS = 16384
+
 
 class ApiType(Enum):
     OPENAI_COMPLETIONS = "openai-completions"
@@ -101,9 +103,27 @@ MODELS: dict[str, Model] = {
         supports_images=True,
         supports_thinking=True,
     ),
+    "gpt-5.4-copilot": Model(
+        id="gpt-5.4",
+        provider="github-copilot",
+        api=ApiType.GITHUB_COPILOT_RESPONSES,
+        base_url="https://api.individual.githubcopilot.com",
+        max_tokens=8192 * 2,
+        supports_images=True,
+        supports_thinking=True,
+    ),
     # OpenAI Codex OAuth models (ChatGPT Plus/Pro subscription)
     "gpt-5.3-codex": Model(
         id="gpt-5.3-codex",
+        provider="openai-codex",
+        api=ApiType.OPENAI_CODEX_RESPONSES,
+        base_url="https://chatgpt.com/backend-api",
+        max_tokens=8192 * 2,
+        supports_images=True,
+        supports_thinking=True,
+    ),
+    "gpt-5.4": Model(
+        id="gpt-5.4",
         provider="openai-codex",
         api=ApiType.OPENAI_CODEX_RESPONSES,
         base_url="https://chatgpt.com/backend-api",
@@ -137,9 +157,6 @@ def get_all_models() -> list[Model]:
 
 def get_models_by_provider(provider: str) -> list[Model]:
     return [m for m in MODELS.values() if m.provider == provider]
-
-
-DEFAULT_MAX_TOKENS = 16384
 
 
 def get_max_tokens(model_id: str) -> int:

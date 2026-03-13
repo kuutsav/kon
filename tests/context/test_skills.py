@@ -280,7 +280,7 @@ description: Global version
 
         assert len(result.skills) == 1
         assert result.skills[0].name == "shared-skill"
-        assert result.skills[0].file_path == str(local_skill_dir / "SKILL.md")
+        assert result.skills[0].path == str(local_skill_dir / "SKILL.md")
         assert any("name collision" in w.message for w in result.warnings)
 
     def test_empty_when_no_skill_directories(self, tmp_path, monkeypatch):
@@ -339,14 +339,7 @@ class TestFormatSkillsForPrompt:
         assert result == ""
 
     def test_single_skill(self):
-        skills = [
-            Skill(
-                name="test-skill",
-                description="A test skill",
-                file_path="/path/to/SKILL.md",
-                base_dir="/path/to",
-            )
-        ]
+        skills = [Skill(name="test-skill", description="A test skill", path="/path/to/SKILL.md")]
 
         result = format_skills_for_prompt(skills)
 
@@ -360,10 +353,7 @@ class TestFormatSkillsForPrompt:
     def test_escapes_xml_chars(self):
         skills = [
             Skill(
-                name="test-skill",
-                description='Uses <angle> & "quotes"',
-                file_path="/path/to/SKILL.md",
-                base_dir="/path/to",
+                name="test-skill", description='Uses <angle> & "quotes"', path="/path/to/SKILL.md"
             )
         ]
 
@@ -375,8 +365,8 @@ class TestFormatSkillsForPrompt:
 
     def test_multiple_skills(self):
         skills = [
-            Skill(name="skill-a", description="First", file_path="/a/SKILL.md", base_dir="/a"),
-            Skill(name="skill-b", description="Second", file_path="/b/SKILL.md", base_dir="/b"),
+            Skill(name="skill-a", description="First", path="/a/SKILL.md"),
+            Skill(name="skill-b", description="Second", path="/b/SKILL.md"),
         ]
 
         result = format_skills_for_prompt(skills)

@@ -17,3 +17,14 @@ def test_get_model_falls_back_to_id_lookup():
 
     assert model is not None
     assert model.provider == "zhipu"
+
+
+def test_get_model_prefers_provider_for_gpt_5_4():
+    copilot = get_model("gpt-5.4", "github-copilot")
+    openai = get_model("gpt-5.4", "openai-codex")
+
+    assert copilot is not None
+    assert openai is not None
+    assert copilot.provider == "github-copilot"
+    assert openai.provider == "openai-codex"
+    assert copilot.api != openai.api

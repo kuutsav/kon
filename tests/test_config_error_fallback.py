@@ -18,7 +18,7 @@ def test_invalid_toml_falls_back_to_defaults_and_records_warning(tmp_path, monke
 
     assert isinstance(cfg, Config)
     assert cfg.llm.default_provider == "openai-codex"
-    assert cfg.llm.default_model == "gpt-5.3-codex"
+    assert cfg.llm.default_model == "gpt-5.4"
 
     warnings = consume_config_warnings()
     assert len(warnings) == 1

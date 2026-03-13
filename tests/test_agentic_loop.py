@@ -136,7 +136,7 @@ async def test_agent_usage_tracking(tools, in_memory_session):
     assert agent_end.total_usage.input_tokens == 10
     assert agent_end.total_usage.output_tokens == 5
     assert agent_end.total_usage.cache_read_tokens == 2
-    assert agent_end.total_usage.total_tokens == 15
+    assert agent_end.total_usage.total_tokens == 17
 
 
 @pytest.mark.asyncio

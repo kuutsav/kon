@@ -130,7 +130,9 @@ class SessionUIMixin:
         """
         Calculate cumulative token usage from session entries.
 
-        Returns (input_tokens, output_tokens, context_tokens, cache_read_tokens, cache_write_tokens).
+        Returns
+        -------
+        (input_tokens, output_tokens, context_tokens, cache_read_tokens, cache_write_tokens)
         """
         input_tokens = 0
         output_tokens = 0

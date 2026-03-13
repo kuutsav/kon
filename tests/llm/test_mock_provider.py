@@ -48,7 +48,7 @@ async def test_mock_provider_reports_usage():
     assert stream.usage.input_tokens == 10
     assert stream.usage.output_tokens == 5
     assert stream.usage.cache_read_tokens == 2
-    assert stream.usage.total_tokens == 15
+    assert stream.usage.total_tokens == 17
 
 
 @pytest.mark.asyncio

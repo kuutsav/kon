@@ -333,8 +333,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             and self._session.entries
         ):
             self._render_session_entries(self._session)
-            input_t, output_t, context_t, cache_read_t, cache_write_t = self._calculate_session_tokens(
-                self._session
+            input_t, output_t, context_t, cache_read_t, cache_write_t = (
+                self._calculate_session_tokens(self._session)
             )
             info_bar.set_tokens(input_t, output_t, context_t, cache_read_t, cache_write_t)
             chat.add_info_message("Resumed session")

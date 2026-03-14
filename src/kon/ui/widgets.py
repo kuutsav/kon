@@ -223,7 +223,7 @@ class StatusLine(Horizontal):
         result.append(" Working...", style=dim_color)
         result.append(" (esc to interrupt)", style=dim_color)
         if self._streaming_token_count > 20:
-            result.append(f" ↓{format_tokens(self._streaming_token_count)}", style=dim_color)
+            result.append(f" ↓{self._streaming_token_count!s}", style=dim_color)
         return result
 
     def _format_complete_status(self) -> Text:

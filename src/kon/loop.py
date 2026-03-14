@@ -218,11 +218,15 @@ class Agent:
         if stop_reason == StopReason.ERROR:
             return
 
-        # Get the last assistant message's usage
+        # Get the latest assistant message that has usage.
+        # The most recent assistant entry can be interrupted/error and have no usage.
         last_usage: Usage | None = None
         for entry in reversed(self.session.entries):
             if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
-                last_usage = entry.message.usage
+                usage = entry.message.usage
+                if usage is None:
+                    continue
+                last_usage = usage
                 break
 
         if last_usage is None:

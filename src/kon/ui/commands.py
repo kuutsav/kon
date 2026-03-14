@@ -583,13 +583,14 @@ Keybindings:
         for entry in reversed(self._session.entries):
             if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
                 usage = entry.message.usage
-                if usage:
-                    tokens_before = (
-                        usage.input_tokens
-                        + usage.output_tokens
-                        + usage.cache_read_tokens
-                        + usage.cache_write_tokens
-                    )
+                if usage is None:
+                    continue
+                tokens_before = (
+                    usage.input_tokens
+                    + usage.output_tokens
+                    + usage.cache_read_tokens
+                    + usage.cache_write_tokens
+                )
                 break
 
         try:

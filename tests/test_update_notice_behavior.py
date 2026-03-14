@@ -1,21 +1,13 @@
 from kon.ui.app import Kon
 
 
-class _FakeChat:
-    def __init__(self) -> None:
-        self.versions: list[str] = []
-
-    def add_update_available_message(self, latest_version: str) -> None:
-        self.versions.append(latest_version)
-
-
 def _make_app() -> Kon:
     return Kon(cwd=".")
 
 
-def test_show_pending_update_notice_shows_once_when_idle() -> None:
+def test_show_pending_update_notice_shows_once_when_idle(fake_chat) -> None:
     app = _make_app()
-    chat = _FakeChat()
+    chat = fake_chat
 
     app.query_one = lambda *args, **kwargs: chat  # type: ignore[method-assign]
     app._startup_complete = True
@@ -30,9 +22,9 @@ def test_show_pending_update_notice_shows_once_when_idle() -> None:
     assert app._pending_update_notice_version is None
 
 
-def test_show_pending_update_notice_waits_until_not_running() -> None:
+def test_show_pending_update_notice_waits_until_not_running(fake_chat) -> None:
     app = _make_app()
-    chat = _FakeChat()
+    chat = fake_chat
 
     app.query_one = lambda *args, **kwargs: chat  # type: ignore[method-assign]
     app._startup_complete = True

@@ -1,14 +1,22 @@
+from types import SimpleNamespace
+
+import pytest
+
 from kon.config import Config
 from kon.core.compaction import is_overflow
 from kon.core.types import (
     AssistantMessage,
+    StopReason,
     TextContent,
     ToolCall,
     ToolResultMessage,
     Usage,
     UserMessage,
 )
+from kon.llm.providers import MockProvider
+from kon.loop import Agent, AgentConfig
 from kon.session import CompactionEntry, Session
+from kon.ui.commands import CommandsMixin
 
 # ---------------------------------------------------------------------------
 # is_overflow tests
@@ -306,6 +314,114 @@ class TestCompactionPersistence:
         # all_messages should have everything
         assert len(loaded.all_messages) == 4
         assert loaded.all_messages[0].content == "Old"
+
+
+# ---------------------------------------------------------------------------
+# Regression tests for usage-less latest assistant messages
+# ---------------------------------------------------------------------------
+
+
+class _TestCommandsApp(CommandsMixin):
+    def __init__(
+        self, session: Session, provider: MockProvider, chat, system_prompt: str = "test"
+    ) -> None:
+        self._session = session
+        self._provider = provider
+        self._agent = SimpleNamespace(system_prompt=system_prompt)
+        self._is_running = False
+        self._chat = chat
+
+    def query_one(self, selector: str, cls):
+        assert selector == "#chat-log"
+        return self._chat
+
+
+class TestCompactionUsageBacktracking:
+    @pytest.mark.asyncio
+    async def test_manual_compaction_uses_latest_assistant_with_usage(
+        self, monkeypatch, fake_chat
+    ):
+        session = Session.in_memory()
+        session.append_message(UserMessage(content="hi"))
+        session.append_message(
+            AssistantMessage(
+                content=[TextContent(text="usable")],
+                usage=Usage(
+                    input_tokens=100, output_tokens=50, cache_read_tokens=10, cache_write_tokens=5
+                ),
+            )
+        )
+        session.append_message(
+            AssistantMessage(
+                content=[TextContent(text="interrupted")],
+                usage=None,
+                stop_reason=StopReason.INTERRUPTED,
+            )
+        )
+
+        provider = MockProvider()
+        app = _TestCommandsApp(session=session, provider=provider, chat=fake_chat)
+
+        async def _fake_summary(*args, **kwargs):
+            return "summary"
+
+        monkeypatch.setattr("kon.ui.commands.generate_summary", _fake_summary)
+
+        await app._do_compact()
+
+        assert fake_chat.errors == []
+        assert fake_chat.compaction_tokens == 165
+        compaction_entries = [e for e in session.entries if isinstance(e, CompactionEntry)]
+        assert len(compaction_entries) == 1
+        assert compaction_entries[0].tokens_before == 165
+
+    @pytest.mark.asyncio
+    async def test_auto_compaction_uses_latest_assistant_with_usage(self, monkeypatch):
+        session = Session.in_memory()
+        session.append_message(UserMessage(content="hi"))
+        session.append_message(
+            AssistantMessage(
+                content=[TextContent(text="usable")],
+                usage=Usage(
+                    input_tokens=3000,
+                    output_tokens=500,
+                    cache_read_tokens=100,
+                    cache_write_tokens=50,
+                ),
+            )
+        )
+        session.append_message(
+            AssistantMessage(
+                content=[TextContent(text="interrupted")],
+                usage=None,
+                stop_reason=StopReason.INTERRUPTED,
+            )
+        )
+
+        provider = MockProvider()
+        agent = Agent(
+            provider=provider,
+            tools=[],
+            session=session,
+            system_prompt="system",
+            config=AgentConfig(context_window=1000, max_output_tokens=1),
+        )
+
+        async def _fake_summary(*args, **kwargs):
+            return "summary"
+
+        monkeypatch.setattr("kon.loop.generate_summary", _fake_summary)
+
+        events = [e async for e in agent._check_compaction(StopReason.STOP, "system", None)]
+        assert [e.type for e in events] == ["compaction_start", "compaction_end"]
+
+        end_event = events[1]
+        assert end_event.type == "compaction_end"
+        assert end_event.tokens_before == 3650
+
+        compaction_entries = [e for e in session.entries if isinstance(e, CompactionEntry)]
+        assert len(compaction_entries) == 1
+        assert compaction_entries[0].tokens_before == 3650
 
 
 # ---------------------------------------------------------------------------

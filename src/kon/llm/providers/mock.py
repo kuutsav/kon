@@ -16,6 +16,8 @@ Scenarios (set via scenario parameter):
 - "long_text": multiple text chunks
 - "tool_hang": emits a tool call and then never sends StreamDone
 - "tool_with_many_chunks": tool call with many argument chunks for token counting tests
+- "leading_empty_text_then_think": emits leading newlines before thinking
+- "leading_empty_text_then_text": emits leading newlines before text
 """
 
 import asyncio
@@ -177,6 +179,25 @@ class MockProvider(BaseProvider):
                     yield StreamDone(stop_reason=StopReason.TOOL_USE)
 
                 return tool_with_many_chunks_iter()
+
+            case "leading_empty_text_then_think":
+
+                async def leading_empty_text_then_think_iter():
+                    yield TextPart(text="\n\n")
+                    yield ThinkPart(think="Let me think about this...")
+                    yield TextPart(text="I'll help you with that.")
+                    yield StreamDone(stop_reason=StopReason.STOP)
+
+                return leading_empty_text_then_think_iter()
+
+            case "leading_empty_text_then_text":
+
+                async def leading_empty_text_then_text_iter():
+                    yield TextPart(text="\n\n")
+                    yield TextPart(text="Hello, world!")
+                    yield StreamDone(stop_reason=StopReason.STOP)
+
+                return leading_empty_text_then_text_iter()
 
             case _:
                 # Fallback to default

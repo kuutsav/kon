@@ -402,6 +402,39 @@ async def test_run_single_turn_stream_error_scenario(sample_messages, tools):
 
 
 @pytest.mark.asyncio
+async def test_run_single_turn_drops_leading_empty_newlines_before_thinking(
+    sample_messages, tools
+):
+    provider = MockProvider(scenario="leading_empty_text_then_think")
+    events = []
+
+    async for event in run_single_turn(provider, sample_messages, tools, turn=1):
+        events.append(event)
+
+    # Should begin with thinking, not empty text
+    assert isinstance(events[0], ThinkingStartEvent)
+    assert not any(isinstance(e, TextDeltaEvent) and not e.delta.strip() for e in events)
+
+    turn_end = next(e for e in events if isinstance(e, TurnEndEvent))
+    assert turn_end.assistant_message is not None
+    assert len(turn_end.assistant_message.content) == 2
+
+
+@pytest.mark.asyncio
+async def test_run_single_turn_drops_leading_empty_newlines_before_text(sample_messages, tools):
+    provider = MockProvider(scenario="leading_empty_text_then_text")
+    events = []
+
+    async for event in run_single_turn(provider, sample_messages, tools, turn=1):
+        events.append(event)
+
+    assert isinstance(events[0], TextStartEvent)
+    text_deltas = [e for e in events if isinstance(e, TextDeltaEvent)]
+    assert len(text_deltas) == 1
+    assert text_deltas[0].delta == "Hello, world!"
+
+
+@pytest.mark.asyncio
 async def test_run_single_turn_unknown_tool_scenario(sample_messages, tools):
     provider = MockProvider(scenario="unknown_tool")
     events = []

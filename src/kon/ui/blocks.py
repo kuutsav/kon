@@ -271,6 +271,7 @@ class ToolBlock(Static):
     def set_result(self, content: str, success: bool, markup: bool = True) -> None:
         self._result = content
         self._success = success
+        self._awaiting_approval = False
         self._set_state(success)
 
         # Parse Rich markup for colored output (tools control their own truncation/styling)

@@ -1,5 +1,6 @@
 import asyncio
 
+from ddgs import DDGS
 from pydantic import BaseModel, Field
 
 from kon import config
@@ -33,13 +34,6 @@ class WebSearchTool(BaseTool):
     async def execute(
         self, params: WebSearchParams, cancel_event: asyncio.Event | None = None
     ) -> ToolResult:
-        try:
-            from ddgs import DDGS
-        except ImportError:
-            return ToolResult(
-                success=False, display="[red]ddgs package not installed (pip install ddgs)[/red]"
-            )
-
         def _search() -> list[dict]:
             return list(DDGS().text(params.query, max_results=params.max_results))
 

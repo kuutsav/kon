@@ -1,6 +1,7 @@
 import asyncio
 
 from pydantic import BaseModel, Field
+from trafilatura import extract, fetch_url
 
 from kon import config
 
@@ -35,14 +36,6 @@ class WebFetchTool(BaseTool):
     async def execute(
         self, params: WebFetchParams, cancel_event: asyncio.Event | None = None
     ) -> ToolResult:
-        try:
-            from trafilatura import extract, fetch_url
-        except ImportError:
-            return ToolResult(
-                success=False,
-                display="[red]trafilatura package not installed (pip install trafilatura)[/red]",
-            )
-
         def _fetch_and_extract() -> str | None:
             html = fetch_url(params.url)
             if not html:

@@ -1,5 +1,3 @@
-from importlib.util import find_spec
-
 from ..core.types import ToolDefinition
 from .base import BaseTool
 from .bash import BashTool
@@ -7,6 +5,8 @@ from .edit import EditTool
 from .find import FindTool
 from .grep import GrepTool
 from .read import ReadTool
+from .web_fetch import WebFetchTool
+from .web_search import WebSearchTool
 from .write import WriteTool
 
 __all__ = [
@@ -17,6 +17,8 @@ __all__ = [
     "FindTool",
     "GrepTool",
     "ReadTool",
+    "WebFetchTool",
+    "WebSearchTool",
     "WriteTool",
     "get_tool",
     "get_tool_definitions",
@@ -24,16 +26,10 @@ __all__ = [
     "tools_by_name",
 ]
 
-all_tools = [ReadTool(), EditTool(), WriteTool(), BashTool(), GrepTool(), FindTool()]
-
-if find_spec("ddgs"):
-    from .web_search import WebSearchTool
-
-    all_tools.append(WebSearchTool())
-if find_spec("trafilatura"):
-    from .web_fetch import WebFetchTool
-
-    all_tools.append(WebFetchTool())
+all_tools = [
+    ReadTool(), EditTool(), WriteTool(), BashTool(), GrepTool(), FindTool(),
+    WebSearchTool(), WebFetchTool(),
+]
 
 tools_by_name: dict[str, BaseTool] = {tool.name: tool for tool in all_tools}
 DEFAULT_TOOLS: list[str] = list(tools_by_name.keys())

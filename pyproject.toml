@@ -27,10 +27,9 @@ dependencies = [
     "pydantic>=2.12.5",
     "rich>=14.3.2",
     "textual>=8.0.0",
+    "ddgs>=9.0.0",
+    "trafilatura>=2.0.0",
 ]
-
-[project.optional-dependencies]
-web = ["ddgs>=9.0.0", "trafilatura>=2.0.0"]
 
 [dependency-groups]
 dev = [

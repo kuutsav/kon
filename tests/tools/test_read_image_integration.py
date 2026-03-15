@@ -40,4 +40,5 @@ async def test_read_image_file_invalid(read_tool, tmp_path):
     result = await read_tool.execute(ReadParams(path=str(invalid_image)))
 
     assert not result.success
+    assert "Failed to read image" in result.result
     assert "Failed to read image" in result.display

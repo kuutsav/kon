@@ -37,6 +37,30 @@ async def test_read(read_tool, text_file, monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_read_path_not_found(read_tool, tmp_path):
+    result = await read_tool.execute(ReadParams(path=str(tmp_path / "nonexistent.txt")))
+    assert not result.success
+    assert "Path not found" in result.result
+    assert "Path not found" in result.display
+
+
+@pytest.mark.asyncio
+async def test_read_not_a_file(read_tool, tmp_path):
+    subdir = tmp_path / "subdir"
+    subdir.mkdir()
+    (subdir / "somefile").write_text("x")
+    # Symlink pointing to a dir is still not a file; but simplest: use a FIFO
+    import os
+
+    fifo_path = tmp_path / "myfifo"
+    os.mkfifo(fifo_path)
+    result = await read_tool.execute(ReadParams(path=str(fifo_path)))
+    assert not result.success
+    assert "Path is not a file" in result.result
+    assert "Path is not a file" in result.display
+
+
+@pytest.mark.asyncio
 async def test_read_directory_runs_ls_and_appends_warning(read_tool, tmp_path, monkeypatch):
     called = {}
 

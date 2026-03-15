@@ -49,6 +49,7 @@ async def test_edit_not_found(edit_tool, text_file):
         EditParams(path=str(text_file), old_string="nonexistent", new_string="replaced")
     )
     assert not result.success
+    assert "not found" in result.result
     assert "not found" in result.display
 
 
@@ -60,6 +61,7 @@ async def test_edit_file_not_found(edit_tool, tmp_path):
         )
     )
     assert not result.success
+    assert "File not found" in result.result
     assert "File not found" in result.display
 
 

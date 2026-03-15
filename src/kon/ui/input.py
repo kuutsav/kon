@@ -61,7 +61,7 @@ class Kon(TextArea):
 
     def watch_scroll_y(self, old_value: float, new_value: float) -> None:
         super().watch_scroll_y(old_value, new_value)
-        self._notify_scroll_info()
+        self.call_after_refresh(self._notify_scroll_info)
 
     def on_text_area_changed(self, event: TextArea.Changed) -> None:
         self.call_after_refresh(self._notify_scroll_info)

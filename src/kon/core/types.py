@@ -58,6 +58,7 @@ class ToolCallStart(BaseModel):
     id: str
     name: str
     index: int  # Tool call index for correlating deltas
+    arguments: dict[str, Any] | None = None
 
 
 class ToolCallDelta(BaseModel):

@@ -15,6 +15,7 @@ Scenarios (set via scenario parameter):
 - "unknown_tool": call unknown tool
 - "long_text": multiple text chunks
 - "tool_hang": emits a tool call and then never sends StreamDone
+- "tool_hang_invalid_json": emits an incomplete tool-call JSON payload and hangs
 - "tool_with_many_chunks": tool call with many argument chunks for token counting tests
 - "leading_empty_text_then_think": emits leading newlines before thinking
 - "leading_empty_text_then_text": emits leading newlines before text
@@ -79,9 +80,9 @@ class MockProvider(BaseProvider):
                 async def default_iter():
                     yield ThinkPart(think="Let me think about this...")
                     yield TextPart(text="I'll help you with that.")
-                    yield ToolCallStart(id="call-1", name="read", index=0)
+                    yield ToolCallStart(id="call-1", name="read", index=0, arguments={})
                     yield ToolCallDelta(index=0, arguments_delta='{"path": "file.txt"}')
-                    yield ToolCallStart(id="call-2", name="bash", index=1)
+                    yield ToolCallStart(id="call-2", name="bash", index=1, arguments={})
                     yield ToolCallDelta(index=1, arguments_delta='{"command": "ls -la"}')
                     yield StreamDone(stop_reason=StopReason.TOOL_USE)
 
@@ -100,7 +101,7 @@ class MockProvider(BaseProvider):
                 async def flow_iter():
                     yield ThinkPart(think="I need to read the file")
                     yield TextPart(text="Let me check the file.")
-                    yield ToolCallStart(id="call-1", name="read", index=0)
+                    yield ToolCallStart(id="call-1", name="read", index=0, arguments={})
                     yield ToolCallDelta(index=0, arguments_delta='{"path": "test.txt"}')
                     yield StreamDone(stop_reason=StopReason.TOOL_USE)
 
@@ -117,7 +118,7 @@ class MockProvider(BaseProvider):
             case "unknown_tool":
 
                 async def unknown_iter():
-                    yield ToolCallStart(id="call-1", name="unknown_tool", index=0)
+                    yield ToolCallStart(id="call-1", name="unknown_tool", index=0, arguments={})
                     yield ToolCallDelta(index=0, arguments_delta='{"arg": "value"}')
                     yield StreamDone(stop_reason=StopReason.TOOL_USE)
 
@@ -135,11 +136,22 @@ class MockProvider(BaseProvider):
             case "tool_hang":
 
                 async def tool_hang_iter():
-                    yield ToolCallStart(id="call-1", name="read", index=0)
+                    yield ToolCallStart(id="call-1", name="read", index=0, arguments={})
                     yield ToolCallDelta(index=0, arguments_delta='{"path": "test.txt"}')
                     await asyncio.sleep(3600)
 
                 return tool_hang_iter()
+
+            case "tool_hang_invalid_json":
+
+                async def tool_hang_invalid_json_iter():
+                    yield ToolCallStart(id="call-1", name="write", index=0, arguments={})
+                    yield ToolCallDelta(
+                        index=0, arguments_delta='{"path": "/tmp/test.txt", "content": "incomplete'
+                    )
+                    await asyncio.sleep(3600)
+
+                return tool_hang_invalid_json_iter()
 
             case "tool_with_many_chunks":
 
@@ -147,7 +159,7 @@ class MockProvider(BaseProvider):
                     # Tool call with many chunks to test token counting
                     # 24 chunks of 8 chars each = 192 chars = 48 tokens
                     # Should trigger token update events at chunks 12, 16, 20, 24
-                    yield ToolCallStart(id="call-1", name="bash", index=0)
+                    yield ToolCallStart(id="call-1", name="bash", index=0, arguments={})
                     chunks = [
                         "aaaaaaa",
                         "bbbbbbb",
@@ -204,9 +216,9 @@ class MockProvider(BaseProvider):
                 async def default_iter():
                     yield ThinkPart(think="Let me think about this...")
                     yield TextPart(text="I'll help you with that.")
-                    yield ToolCallStart(id="call-1", name="read", index=0)
+                    yield ToolCallStart(id="call-1", name="read", index=0, arguments={})
                     yield ToolCallDelta(index=0, arguments_delta='{"path": "file.txt"}')
-                    yield ToolCallStart(id="call-2", name="bash", index=1)
+                    yield ToolCallStart(id="call-2", name="bash", index=1, arguments={})
                     yield ToolCallDelta(index=1, arguments_delta='{"command": "ls -la"}')
                     yield StreamDone(stop_reason=StopReason.TOOL_USE)
 

@@ -92,6 +92,7 @@ class PendingToolCall:
     tool_call: ToolCall
     tool: BaseTool | None
     display: str
+    preflight_error: str | None = None
 
 
 async def _safe_anext(aiter):
@@ -126,23 +127,43 @@ def _create_skipped_tool_result(
 
 
 def _finalize_tool_call_data(tool_call_data: dict, tools: list[BaseTool]) -> PendingToolCall:
-    try:
-        arguments = json.loads(tool_call_data["arguments"])
-    except json.JSONDecodeError:
-        arguments = {}
+    arguments_raw = tool_call_data["arguments"]
+    initial_arguments = tool_call_data.get("initial_arguments")
+    initial_arguments_dict = initial_arguments if isinstance(initial_arguments, dict) else {}
+    preflight_error: str | None = None
+
+    stripped_args = arguments_raw.strip()
+    if stripped_args:
+        try:
+            arguments = json.loads(arguments_raw)
+        except json.JSONDecodeError:
+            if initial_arguments_dict:
+                arguments = initial_arguments_dict
+            else:
+                arguments = {}
+                preflight_error = (
+                    "Tool call arguments were incomplete or invalid JSON; "
+                    "skipping execution instead of running with empty arguments."
+                )
+    else:
+        arguments = initial_arguments_dict
 
     tool_call = ToolCall(id=tool_call_data["id"], name=tool_call_data["name"], arguments=arguments)
 
     tool = get_tool(tool_call.name)
     display = ""
-    if tool:
+    if tool and preflight_error is None:
         try:
             params = tool.params(**arguments)
             display = tool.format_call(params)
         except (TypeError, KeyError, ValueError, ValidationError):
-            pass
+            preflight_error = (
+                "Tool call arguments failed validation before execution; skipping execution."
+            )
 
-    return PendingToolCall(tool_call=tool_call, tool=tool, display=display)
+    return PendingToolCall(
+        tool_call=tool_call, tool=tool, display=display, preflight_error=preflight_error
+    )
 
 
 async def _execute_tool(
@@ -393,7 +414,7 @@ async def run_single_turn(
 
                 yield TextDeltaEvent(delta=t)
 
-            case ToolCallStart(id=id, name=name):
+            case ToolCallStart(id=id, name=name, arguments=initial_arguments):
                 has_meaningful_output = True
                 if current_state and current_state != StreamState.TOOL_CALL:
                     for finalize_event in _finalize_current_state():
@@ -406,8 +427,20 @@ async def run_single_turn(
                 _tool_arg_chunk_counter = 0
                 _tool_arg_token_count = 0
 
+                initial_arguments_json = ""
+                if initial_arguments:
+                    try:
+                        initial_arguments_json = json.dumps(initial_arguments)
+                    except (TypeError, ValueError):
+                        initial_arguments_json = ""
+
                 current_state = StreamState.TOOL_CALL
-                current_tool_call = {"id": id, "name": name, "arguments": ""}
+                current_tool_call = {
+                    "id": id,
+                    "name": name,
+                    "arguments": initial_arguments_json,
+                    "initial_arguments": initial_arguments or {},
+                }
 
                 yield ToolStartEvent(tool_call_id=id, tool_name=name)
 
@@ -472,6 +505,12 @@ async def run_single_turn(
         if cancel_event and cancel_event.is_set():
             # Skip remaining tools
             result = _create_skipped_tool_result(pending.tool_call)
+            tool_results.append(result)
+            yield ToolResultEvent(
+                tool_call_id=pending.tool_call.id, tool_name=pending.tool_call.name, result=result
+            )
+        elif pending.preflight_error is not None:
+            result = _create_skipped_tool_result(pending.tool_call, reason=pending.preflight_error)
             tool_results.append(result)
             yield ToolResultEvent(
                 tool_call_id=pending.tool_call.id, tool_name=pending.tool_call.name, result=result

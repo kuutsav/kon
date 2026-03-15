@@ -5,6 +5,7 @@ from anthropic import APIStatusError, AsyncAnthropic, RateLimitError
 from anthropic.types import (
     ContentBlockDeltaEvent,
     ContentBlockStartEvent,
+    ContentBlockStopEvent,
     ImageBlockParam,
     MessageDeltaEvent,
     MessageParam,
@@ -148,7 +149,7 @@ class AnthropicProvider(BaseProvider):
     ) -> AsyncIterator[StreamPart]:
         stop_reason: StopReason = StopReason.STOP
         current_tool_index: int = -1
-        tool_use_blocks: dict[int, dict[str, Any]] = {}  # index -> {id, name}
+        tool_use_blocks: dict[int, dict[str, Any]] = {}  # index -> {id, name, input}
 
         try:
             async for event in response:
@@ -173,8 +174,17 @@ class AnthropicProvider(BaseProvider):
                     block = event.content_block
                     if isinstance(block, ToolUseBlock):
                         current_tool_index += 1
-                        tool_use_blocks[event.index] = {"id": block.id, "name": block.name}
-                        yield ToolCallStart(id=block.id, name=block.name, index=current_tool_index)
+                        tool_use_blocks[event.index] = {
+                            "id": block.id,
+                            "name": block.name,
+                            "input": block.input,
+                        }
+                        yield ToolCallStart(
+                            id=block.id,
+                            name=block.name,
+                            index=current_tool_index,
+                            arguments=block.input,
+                        )
                     elif isinstance(block, ThinkingBlock):
                         # Thinking block start - content comes in deltas
                         pass
@@ -200,6 +210,9 @@ class AnthropicProvider(BaseProvider):
                                 index=logical_index,
                                 arguments_delta=delta.partial_json,  # type: ignore[attr-defined]
                             )
+
+                elif isinstance(event, ContentBlockStopEvent):
+                    pass
 
                 elif isinstance(event, MessageDeltaEvent):
                     if event.delta.stop_reason:

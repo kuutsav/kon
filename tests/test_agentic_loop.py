@@ -501,6 +501,28 @@ async def test_run_single_turn_tool_hang_timeout_fallback(sample_messages, tools
 
 
 @pytest.mark.asyncio
+async def test_run_single_turn_skips_tool_on_invalid_partial_json_arguments(
+    sample_messages, tools
+):
+    set_config(Config({"llm": {"tool_call_idle_timeout_seconds": 0.01}}))
+    try:
+        provider = MockProvider(scenario="tool_hang_invalid_json")
+        events = []
+
+        async for event in run_single_turn(provider, sample_messages, tools, turn=1):
+            events.append(event)
+    finally:
+        reset_config()
+
+    tool_result = next(e for e in events if isinstance(e, ToolResultEvent))
+    assert tool_result.result is not None
+    assert tool_result.result.is_error is True
+    first_content = tool_result.result.content[0]
+    assert isinstance(first_content, TextContent)
+    assert "incomplete or invalid JSON" in first_content.text
+
+
+@pytest.mark.asyncio
 async def test_run_single_turn_pre_cancelled(sample_messages, tools):
     cancel_event = asyncio.Event()
     cancel_event.set()  # Pre-cancelled

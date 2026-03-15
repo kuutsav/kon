@@ -10,6 +10,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- Added `/handoff` to start a focused handoff in a new session, including handoff links between sessions.
 - Added Azure AI Foundry provider support for Anthropic models.
 - Added configurable Git context controls in the system prompt.
 - Added startup launch warnings for provider/config/skill initialization issues.
@@ -35,10 +36,6 @@ All notable changes to this project will be documented in this file.
 - Fixed markdown finalization to preserve block-level structure after streaming.
 - Fixed editor/input UX regressions (newline border flicker and truncation/history cycling conflicts).
 - Fixed git-status prompt spacing and reduced git-context prompt cap for stability.
-
-### Tests
-
-- Added result assertions for tool error paths.
 
 ## 0.2.7 - 2026-03-14
 

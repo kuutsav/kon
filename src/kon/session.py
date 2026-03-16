@@ -135,6 +135,7 @@ class Session:
         safe_cwd = cwd.replace("/", "-").replace("\\", "-").strip("-")
         sessions_dir = home / CONFIG_DIR_NAME / "sessions" / safe_cwd
         sessions_dir.mkdir(parents=True, exist_ok=True)
+        sessions_dir.chmod(0o700)
         return sessions_dir
 
     def __init__(

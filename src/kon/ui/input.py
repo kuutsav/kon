@@ -3,9 +3,11 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Callable
+from types import SimpleNamespace
 from typing import TYPE_CHECKING, ClassVar
 
 from textual import events
+from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual.app import ComposeResult
 from textual.binding import Binding
 from textual.containers import Vertical
@@ -26,6 +28,8 @@ from .prompt_history import PromptHistory
 if TYPE_CHECKING:
     pass
 
+
+ANSI_SEQUENCES_KEYS["\x1b\r"] = (SimpleNamespace(value="shift+enter"),)  # type: ignore[assignment]
 
 _PASTE_LINE_THRESHOLD = 5
 _PASTE_CHAR_THRESHOLD = 500

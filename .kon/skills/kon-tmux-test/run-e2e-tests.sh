@@ -104,10 +104,10 @@ capture /tmp/kon-test-4-new.txt
 
 # =============================================================================
 # Test 5: Tab completion - unique match
-# Verify: typing "sr" then Tab completes to "src/"
+# Verify: typing "pypr" then Tab completes to "pyproject.toml"
 # =============================================================================
 echo "Test 5: Tab completion - unique match..."
-tmux send-keys -t "$SESSION_NAME" 'sr'
+tmux send-keys -t "$SESSION_NAME" 'pypr'
 sleep 1
 tmux send-keys -t "$SESSION_NAME" Tab
 sleep 2
@@ -116,10 +116,11 @@ clear_input
 
 # =============================================================================
 # Test 6: Tab completion - multiple alternatives (floating list)
-# Verify: typing "s" then Tab shows floating list with scripts/, src/
+# Verify: typing "src/kon/ui/s" then Tab shows a list including:
+# selection_mode.py, session_ui.py, styles.py
 # =============================================================================
 echo "Test 6: Tab completion - multiple alternatives..."
-tmux send-keys -t "$SESSION_NAME" 's'
+tmux send-keys -t "$SESSION_NAME" 'src/kon/ui/s'
 sleep 1
 tmux send-keys -t "$SESSION_NAME" Tab
 sleep 2
@@ -127,11 +128,11 @@ capture /tmp/kon-test-6-tab-multiple.txt
 clear_input
 
 # =============================================================================
-# Test 7: Tab completion - home directory
-# Verify: typing "~/De" then Tab shows floating list with Desktop/, Developer/, etc.
+# Test 7: Tab completion - nested unique file
+# Verify: typing "src/kon/ui/widg" then Tab completes to "src/kon/ui/widgets.py"
 # =============================================================================
-echo "Test 7: Tab completion - home directory..."
-tmux send-keys -t "$SESSION_NAME" '~/De'
+echo "Test 7: Tab completion - nested unique file..."
+tmux send-keys -t "$SESSION_NAME" 'src/kon/ui/widg'
 sleep 1
 tmux send-keys -t "$SESSION_NAME" Tab
 sleep 2
@@ -140,14 +141,14 @@ clear_input
 
 # =============================================================================
 # Test 8: Tab completion - select from list
-# Verify: typing "s" Tab shows list, then select with Enter applies completion
+# Verify: typing "src/kon/ui/s" Tab shows list, then Enter applies first completion
 # =============================================================================
 echo "Test 8: Tab completion - select from list..."
-tmux send-keys -t "$SESSION_NAME" 's'
+tmux send-keys -t "$SESSION_NAME" 'src/kon/ui/s'
 sleep 1
 tmux send-keys -t "$SESSION_NAME" Tab
 sleep 2
-# Select first item (scripts/) with Enter
+# Select first item from floating list with Enter
 tmux send-keys -t "$SESSION_NAME" Enter
 sleep 1
 capture /tmp/kon-test-8-tab-select.txt

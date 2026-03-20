@@ -1,15 +1,19 @@
 import asyncio
+from copy import deepcopy
 
 from pydantic import BaseModel, Field
 from trafilatura import extract, fetch_url
-
-from kon import config
+from trafilatura.settings import DEFAULT_CONFIG
 
 from ..core.types import ToolResult
 from .base import BaseTool
 
 MAX_CHARS = 80_000
 MAX_CHARS_PER_LINE = 2000
+DOWNLOAD_TIMEOUT = 5
+
+_download_config = deepcopy(DEFAULT_CONFIG)
+_download_config["DEFAULT"]["DOWNLOAD_TIMEOUT"] = str(DOWNLOAD_TIMEOUT)
 
 
 class WebFetchParams(BaseModel):
@@ -28,17 +32,16 @@ class WebFetchTool(BaseTool):
     )
 
     def format_call(self, params: WebFetchParams) -> str:
-        accent = config.ui.colors.accent
         url = params.url
         if len(url) > 80:
             url = url[:77] + "..."
-        return f"[{accent}]{url}[/{accent}]"
+        return url
 
     async def execute(
         self, params: WebFetchParams, cancel_event: asyncio.Event | None = None
     ) -> ToolResult:
         def _fetch_and_extract() -> str | None:
-            html = fetch_url(params.url)
+            html = fetch_url(params.url, config=_download_config)
             if not html:
                 return None
             return extract(
@@ -47,6 +50,7 @@ class WebFetchTool(BaseTool):
                 include_comments=False,
                 include_tables=True,
                 favor_precision=True,
+                config=_download_config,
             )
 
         try:
@@ -81,7 +85,7 @@ class WebFetchTool(BaseTool):
             cut = content.rfind("\n", 0, MAX_CHARS)
             content = content[: cut if cut > 0 else MAX_CHARS] + "\n\n[content truncated]"
 
-        ui_summary = f"[dim]{char_count:,} chars[/dim]"
+        ui_summary = f"[dim]({char_count:,} chars)[/dim]"
         if truncated:
             ui_summary += " [yellow](truncated)[/yellow]"
 

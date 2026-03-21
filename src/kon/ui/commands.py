@@ -175,6 +175,8 @@ Extra tools:
             parts = [m.provider]
             if not m.supports_images:
                 parts.append("[no-vision]")
+            if m.id == self._model and m.provider == self._model_provider:
+                parts.append("✓")
             caption = " ".join(parts)
             items.append(ListItem(value=m, label=m.id, description=caption))
 
@@ -199,8 +201,13 @@ Extra tools:
                 chat.add_info_message(str(e), error=True)
             return
 
+        current_theme = config.ui.theme
         items = [
-            ListItem(value=theme_id, label=label, description=theme_id)
+            ListItem(
+                value=theme_id,
+                label=label,
+                description=f"{theme_id} ✓" if theme_id == current_theme else theme_id,
+            )
             for theme_id, label in get_theme_options()
         ]
 
@@ -218,7 +225,10 @@ Extra tools:
         set_theme(theme_id)
         self._apply_theme(theme_id)
         chat = self.query_one("#chat-log", ChatLog)
-        chat.add_info_message(f"Theme changed to {theme_id}")
+        chat.add_info_message(
+            f"Theme changed to {theme_id}. Full theme refresh applies when kon is restarted.",
+            warning=True,
+        )
 
     def _select_model(self, model) -> None:
         chat = self.query_one("#chat-log", ChatLog)

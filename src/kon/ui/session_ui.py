@@ -14,8 +14,9 @@ from ..core.types import (
     UserMessage,
 )
 from ..llm import ApiType, BaseProvider, ProviderConfig, get_max_tokens, get_model
+from ..loop import Agent, build_system_prompt
 from ..session import CompactionEntry, CustomMessageEntry, MessageEntry, Session
-from ..tools import get_tool, tools_by_name
+from ..tools import BaseTool, get_tool, tools_by_name
 from .chat import ChatLog
 from .commands import CommandsMixin
 from .input import InputBox
@@ -34,6 +35,7 @@ class SessionUIMixin:
     _thinking_level: str
     _api_key: str | None
     _provider: BaseProvider | None
+    _tools: list[BaseTool]
 
     # Methods from App - declared for type checking
     if TYPE_CHECKING:
@@ -289,6 +291,20 @@ class SessionUIMixin:
         self._thinking_level = thinking_level
         info_bar.set_thinking_level(thinking_level)
         self._apply_thinking_level_style(thinking_level)
+
+        if self._provider is not None:
+            system_prompt = session.system_prompt or build_system_prompt(
+                self._cwd, tools=self._tools
+            )
+            self._agent = Agent(
+                provider=self._provider,
+                tools=self._tools,
+                session=session,
+                cwd=self._cwd,
+                system_prompt=system_prompt,
+            )
+        elif self._agent is not None:
+            self._agent.session = session
 
         await chat.remove_all_children()
 

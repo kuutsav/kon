@@ -2,13 +2,12 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime
-from pathlib import Path
 
-from kon import CONFIG_DIR_NAME
+from kon.config import get_config_dir
 
 
-def get_turn_metrics_path() -> Path:
-    return Path.home() / CONFIG_DIR_NAME / "turn-metrics.jsonl"
+def get_turn_metrics_path():
+    return get_config_dir() / "turn-metrics.jsonl"
 
 
 def append_run_metric(

@@ -20,11 +20,16 @@ CONFIG_DIR_NAME: str = ".kon"
 OnOverflowMode = Literal["continue", "pause"]
 
 
-def _load_default_config_text() -> str:
+# =================================================================================================
+# Persisted Config Schema and Defaults
+# =================================================================================================
+
+
+def _load_default_config_toml() -> str:
     return resources.files("kon.defaults").joinpath("config.toml").read_text(encoding="utf-8")
 
 
-_DEFAULT_CONFIG_DATA = tomllib.loads(_load_default_config_text())
+_DEFAULT_CONFIG_DATA = tomllib.loads(_load_default_config_toml())
 CURRENT_CONFIG_VERSION = int(_DEFAULT_CONFIG_DATA.get("meta", {}).get("config_version", 1))
 
 _config_var: ContextVar["Config | None"] = ContextVar("kon_config", default=None)
@@ -90,6 +95,11 @@ class ConfigSchema(BaseModel):
     agent: AgentConfig
     tools: ToolsConfig = ToolsConfig()
     permissions: PermissionsConfig
+
+
+# =================================================================================================
+# Runtime Config Accessors
+# =================================================================================================
 
 
 class _BinariesConfig:
@@ -182,6 +192,11 @@ class Config:
         return _BinariesConfig(AVAILABLE_BINARIES)
 
 
+# =================================================================================================
+# Persisted Config IO, Migration, and Serialization
+# =================================================================================================
+
+
 def get_config_dir() -> Path:
     return Path.home() / CONFIG_DIR_NAME
 
@@ -192,7 +207,7 @@ def _ensure_config_file() -> Path:
 
     if not config_file.exists():
         config_dir.mkdir(parents=True, exist_ok=True)
-        config_file.write_text(_load_default_config_text(), encoding="utf-8")
+        config_file.write_text(_load_default_config_toml(), encoding="utf-8")
 
     return config_file
 
@@ -365,12 +380,23 @@ def _backup_and_write_migrated_config(config_file: Path, data: dict[str, Any]) -
     return backup_path
 
 
+# =================================================================================================
+# Runtime Environment Capabilities
+# TODO: Consider moving runtime capability detection and caching to a dedicated runtime.py module.
+# =================================================================================================
+
+
 AVAILABLE_BINARIES = _detect_available_binaries()
 
 
 def update_available_binaries() -> None:
     AVAILABLE_BINARIES.clear()
     AVAILABLE_BINARIES.update(_detect_available_binaries())
+
+
+# =================================================================================================
+# Persisted Config Loading and Runtime Cache
+# =================================================================================================
 
 
 def _read_config_data(config_file: Path) -> dict[str, Any]:

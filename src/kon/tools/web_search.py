@@ -4,6 +4,7 @@ from ddgs import DDGS
 from pydantic import BaseModel, Field
 
 from ..core.types import ToolResult
+from ._tool_utils import ToolCancelledError, await_task_or_cancel
 from .base import BaseTool
 
 
@@ -36,18 +37,9 @@ class WebSearchTool(BaseTool):
 
         try:
             work = asyncio.create_task(asyncio.to_thread(_search))
-            if cancel_event:
-                cancel = asyncio.create_task(cancel_event.wait())
-                done, pending = await asyncio.wait(
-                    [work, cancel], return_when=asyncio.FIRST_COMPLETED
-                )
-                for t in pending:
-                    t.cancel()
-                if cancel in done:
-                    return ToolResult(success=False, result="Search aborted")
-            else:
-                await work
-            results = work.result()
+            results = await await_task_or_cancel(work, cancel_event)
+        except ToolCancelledError:
+            return ToolResult(success=False, result="Search aborted")
         except Exception as e:
             return ToolResult(success=False, ui_summary=f"[red]Search failed: {e}[/red]")
 
@@ -65,4 +57,5 @@ class WebSearchTool(BaseTool):
 
         result_text = "\n".join(lines).strip()
         ui_summary = f"[dim]({len(results)} results)[/dim]"
+
         return ToolResult(success=True, result=result_text, ui_summary=ui_summary)

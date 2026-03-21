@@ -163,6 +163,31 @@ class ToolResult(BaseModel):
     success: bool
     result: str | None = None  # Raw result (sent to LLM)
     images: list[ImageContent] | None = None  # Images to include in result
-    ui_summary: str | None = None  # One-line UI text rendered on tool header line
-    ui_details: str | None = None  # Multiline UI text rendered below the header
+    ui_summary: str | None = None  # One-line result text appended to the tool header
+    ui_details: str | None = None  # Multiline result body rendered below the header
     file_changes: FileChanges | None = None  # Track +/- lines for edit/write tools
+
+
+# UI rendering model:
+#
+# format_call is defined for each tool like Read tool and the result they
+# return contains further details (along with the resulf for llm) to help paint
+# the coomplete picture (or as close to it as possible without polluting) in the ui
+#
+# - format_call(params): short call text shown on the header line
+# - ui_summary: one-line result summary appended to the same header line
+# - ui_details: multiline result body shown below the header
+#
+# Example (read):
+#   → Read ~/src/kon/turn.py:150-204 (55 lines)
+#   - format_call -> "~/src/kon/turn.py:150-204"
+#   - ui_summary  -> "(55 lines)"
+#   - ui_details  -> None
+#
+# Example (edit):
+#   + Edit ~/src/kon/tools/base.py +3 -1
+#     -12 old line
+#     +12 new line
+#   - format_call -> "~/src/kon/tools/base.py"
+#   - ui_summary  -> "+3 -1"
+#   - ui_details  -> formatted diff

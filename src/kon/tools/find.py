@@ -5,10 +5,11 @@ from pydantic import BaseModel, Field
 
 from ..core.types import ToolResult
 from ..tools_manager import ensure_tool
+from ._tool_utils import ToolCancelledError, communicate_or_cancel, truncate_lines_by_bytes
 from .base import BaseTool
 
 MAX_RESULTS = 100
-MAX_OUTPUT_BYTES = 50 * 1024
+MAX_OUTPUT_BYTES = 20 * 1024
 
 
 class FindParams(BaseModel):
@@ -70,20 +71,10 @@ class FindTool(BaseTool):
             *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
-        if cancel_event:
-            comm_task = asyncio.create_task(proc.communicate())
-            cancel_wait = asyncio.create_task(cancel_event.wait())
-            done, pending = await asyncio.wait(
-                [comm_task, cancel_wait], return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-            if cancel_wait in done:
-                proc.kill()
-                return ToolResult(success=False, result="Search aborted")
-            stdout, stderr = comm_task.result()
-        else:
-            stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await communicate_or_cancel(proc, cancel_event)
+        except ToolCancelledError:
+            return ToolResult(success=False, result="Search aborted")
 
         exit_code = proc.returncode
         output = stdout.decode("utf-8", errors="replace").strip()
@@ -120,16 +111,14 @@ class FindTool(BaseTool):
 
         relativized = [f[0] for f in files]
         truncated = len(relativized) >= MAX_RESULTS
-        result_text = "\n".join(relativized)
+
+        result_text, _ = truncate_lines_by_bytes(relativized, MAX_OUTPUT_BYTES)
 
         if truncated:
             result_text += (
                 f"\n\n[{MAX_RESULTS} results limit reached; "
-                "refine the pattern for more specific results]"
+                "refine the pattern or path for more specific results]"
             )
-
-        if len(result_text.encode("utf-8")) > MAX_OUTPUT_BYTES:
-            result_text = result_text[: MAX_OUTPUT_BYTES // 2] + "\n\n[output truncated]"
 
         count = len(relativized)
         display = f"[dim]({count} files)[/dim]"

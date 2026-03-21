@@ -6,6 +6,7 @@ from trafilatura import extract, fetch_url
 from trafilatura.settings import DEFAULT_CONFIG
 
 from ..core.types import ToolResult
+from ._tool_utils import ToolCancelledError, await_task_or_cancel
 from .base import BaseTool
 
 MAX_CHARS = 80_000
@@ -33,9 +34,7 @@ class WebFetchTool(BaseTool):
 
     def format_call(self, params: WebFetchParams) -> str:
         url = params.url
-        if len(url) > 80:
-            url = url[:77] + "..."
-        return url
+        return url[:77] + "..." if len(url) > 80 else url
 
     async def execute(
         self, params: WebFetchParams, cancel_event: asyncio.Event | None = None
@@ -55,18 +54,9 @@ class WebFetchTool(BaseTool):
 
         try:
             work = asyncio.create_task(asyncio.to_thread(_fetch_and_extract))
-            if cancel_event:
-                cancel = asyncio.create_task(cancel_event.wait())
-                done, pending = await asyncio.wait(
-                    [work, cancel], return_when=asyncio.FIRST_COMPLETED
-                )
-                for t in pending:
-                    t.cancel()
-                if cancel in done:
-                    return ToolResult(success=False, result="Fetch aborted")
-            else:
-                await work
-            content = work.result()
+            content = await await_task_or_cancel(work, cancel_event)
+        except ToolCancelledError:
+            return ToolResult(success=False, result="Fetch aborted")
         except Exception as e:
             return ToolResult(success=False, ui_summary=f"[red]Fetch failed: {e}[/red]")
 

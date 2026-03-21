@@ -6,10 +6,11 @@ from pydantic import BaseModel, Field
 
 from ..core.types import ToolResult
 from ..tools_manager import ensure_tool
+from ._tool_utils import ToolCancelledError, communicate_or_cancel, truncate_lines_by_bytes
 from .base import BaseTool
 
 MAX_MATCHES = 100
-MAX_OUTPUT_BYTES = 50 * 1024
+MAX_OUTPUT_BYTES = 20 * 1024
 MAX_LINE_LENGTH = 2000
 
 
@@ -77,20 +78,10 @@ class GrepTool(BaseTool):
             *args, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
-        if cancel_event:
-            comm_task = asyncio.create_task(proc.communicate())
-            cancel_wait = asyncio.create_task(cancel_event.wait())
-            done, pending = await asyncio.wait(
-                [comm_task, cancel_wait], return_when=asyncio.FIRST_COMPLETED
-            )
-            for task in pending:
-                task.cancel()
-            if cancel_wait in done:
-                proc.kill()
-                return ToolResult(success=False, result="Search aborted")
-            stdout, stderr = comm_task.result()
-        else:
-            stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await communicate_or_cancel(proc, cancel_event)
+        except ToolCancelledError:
+            return ToolResult(success=False, result="Search aborted")
 
         exit_code = proc.returncode
 
@@ -153,16 +144,13 @@ class GrepTool(BaseTool):
                 line_text = line_text[:MAX_LINE_LENGTH] + "..."
             output_lines.append(f"  Line {line_num}: {line_text}")
 
-        result_text = "\n".join(output_lines)
+        result_text, _ = truncate_lines_by_bytes(output_lines, MAX_OUTPUT_BYTES)
 
         if truncated:
-            output_lines += (
+            result_text += (
                 f"\n\n[showing {MAX_MATCHES} of {total_matches} matches; "
                 "refine the pattern or path for more specific results]"
             )
-
-        if len(result_text.encode("utf-8")) > MAX_OUTPUT_BYTES:
-            result_text = result_text[: MAX_OUTPUT_BYTES // 2] + "\n\n[output truncated]"
 
         match_count = min(total_matches, MAX_MATCHES)
         display = f"[dim]({match_count} matches)[/dim]"

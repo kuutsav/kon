@@ -7,6 +7,11 @@ from ..core.types import ToolResult
 
 
 class BaseTool[T: BaseModel](ABC):
+    # UI model for tool blocks:
+    # - format_call(params): short call text shown on the tool header
+    # - ToolResult.ui_summary: one-line result summary appended to that header
+    # - ToolResult.ui_details: multiline result body shown below the header
+    # - format_preview(params): approval-time preview shown before execution
     name: str
     params: type[T]
     description: str

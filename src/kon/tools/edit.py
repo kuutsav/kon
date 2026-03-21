@@ -12,7 +12,6 @@ from ..shared import shorten_path
 from .base import BaseTool, ToolResult
 
 CONTEXT_LINES = 4
-MAX_DIFF_LINE_DISPLAY_CHARS = 105
 
 
 class EditParams(BaseModel):
@@ -132,7 +131,7 @@ def generate_diff(
     return "\n".join(output), added, removed
 
 
-def truncate_diff_line(line: str, max_chars: int = MAX_DIFF_LINE_DISPLAY_CHARS) -> str:
+def truncate_diff_line(line: str, max_chars: int = 105) -> str:
     if len(line) <= max_chars:
         return line
     if max_chars <= 3:

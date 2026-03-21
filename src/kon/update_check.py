@@ -1,44 +1,25 @@
-import re
-
 import aiohttp
 
 
-def _base_version_tuple(version: str) -> tuple[int, ...]:
-    match = re.match(r"^\s*v?(\d+(?:\.\d+)*)", version.strip().lower())
-    if not match:
-        return (0,)
+def _semver_tuple(version: str) -> tuple[int, int, int] | None:
+    """Parse Kon versions that follow numeric semantic versioning.
 
-    parts = [int(part) for part in match.group(1).split(".")]
-    while len(parts) > 1 and parts[-1] == 0:
-        parts.pop()
-    return tuple(parts)
-
-
-def _stage_key(version: str) -> tuple[int, int]:
-    match = re.match(r"^\s*v?\d+(?:\.\d+)*(.*)$", version.strip().lower())
-    rest = match.group(1) if match else ""
-
-    stage_patterns: list[tuple[str, int]] = [
-        (r"^[._-]?dev(\d*)", -2),
-        (r"^[._-]?(?:a|alpha)(\d*)", -1),
-        (r"^[._-]?(?:b|beta)(\d*)", 0),
-        (r"^[._-]?rc(\d*)", 1),
-        (r"^[._-]?post(\d*)", 3),
-    ]
-
-    for pattern, stage in stage_patterns:
-        stage_match = re.match(pattern, rest)
-        if stage_match:
-            number = int(stage_match.group(1)) if stage_match.group(1) else 0
-            return stage, number
-
-    return 2, 0
+    Update checks intentionally only support `MAJOR.MINOR.PATCH` versions
+    such as `0.2.7` or `0.3.0`. If Kon's release versioning changes, this parser
+    and the comparison logic in this module should be updated to match the new scheme.
+    """
+    parts = version.strip().split(".")
+    if len(parts) != 3 or any(not part.isdigit() for part in parts):
+        return None
+    return int(parts[0]), int(parts[1]), int(parts[2])
 
 
 def is_newer_version(current_version: str, latest_version: str) -> bool:
-    current_key = (_base_version_tuple(current_version), *_stage_key(current_version))
-    latest_key = (_base_version_tuple(latest_version), *_stage_key(latest_version))
-    return latest_key > current_key
+    current_tuple = _semver_tuple(current_version)
+    latest_tuple = _semver_tuple(latest_version)
+    if current_tuple is None or latest_tuple is None:
+        return False
+    return latest_tuple > current_tuple
 
 
 async def fetch_latest_pypi_version(package_name: str, timeout_seconds: float = 4.0) -> str | None:

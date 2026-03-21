@@ -10,10 +10,10 @@ def test_is_newer_version_basic_semver_cases() -> None:
     assert not is_newer_version("1.0.0", "1.0.0")
 
 
-def test_is_newer_version_prerelease_ordering() -> None:
-    assert is_newer_version("1.0.0rc1", "1.0.0")
+def test_is_newer_version_returns_false_for_non_semver_values() -> None:
+    assert not is_newer_version("1.0.0rc1", "1.0.0")
     assert not is_newer_version("1.0.0", "1.0.0rc1")
-    assert is_newer_version("1.0.0b1", "1.0.0rc1")
+    assert not is_newer_version("bad", "1.0.0")
 
 
 @pytest.mark.asyncio

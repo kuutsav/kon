@@ -15,6 +15,12 @@ Use this skill when the user asks to cut a new Kon version, tag it, publish to P
 - Whether to publish to PyPI now
 - Whether to create GitHub release now
 
+## Versioning requirement
+
+- Kon's update check only supports strict numeric `MAJOR.MINOR.PATCH` versions such as `0.2.7` and `0.3.0`.
+- Do **not** cut releases with PyPI/PEP 440 prerelease or suffix forms like `0.3.0rc1`, `0.3.0b1`, `0.3.0.post1`, or `0.3.0.dev1` unless the update-check logic is updated first.
+- Even though PyPI commonly allows those formats, Kon releases should continue following plain `X.Y.Z` so update detection stays correct.
+
 ## Files to bump
 
 - `pyproject.toml` → `[project].version`

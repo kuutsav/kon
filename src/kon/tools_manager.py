@@ -162,6 +162,8 @@ def _extract_binary(archive_path: Path, binary_name: str, dest: Path) -> Path:
 
 
 async def _download_tool(tool: ToolName) -> str:
+    # TODO: Move archive extraction and other synchronous file operations
+    # off the event loop so background tool installation cannot cause UI hiccups.
     config = _TOOLS[tool]
     plat = _get_platform()
     arch = _get_arch()

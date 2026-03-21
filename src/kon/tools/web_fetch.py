@@ -61,9 +61,7 @@ class WebFetchTool(BaseTool):
             return ToolResult(success=False, ui_summary=f"[red]Fetch failed: {e}[/red]")
 
         if not content:
-            return ToolResult(
-                success=False, ui_summary=f"[red]Could not extract content from {params.url}[/red]"
-            )
+            return ToolResult(success=False, ui_summary="[red]Couldn't extract content[/red]")
 
         lines = content.split("\n")
         lines = [line[:MAX_CHARS_PER_LINE] for line in lines]

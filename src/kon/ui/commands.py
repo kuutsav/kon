@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -645,14 +644,8 @@ Extra tools:
                 "Waiting for authorization callback on http://localhost:1455/auth/callback ...",
             )
 
-        async def on_manual_input() -> str:
-            loop = asyncio.get_running_loop()
-            return await loop.run_in_executor(
-                None, input, "Paste OpenAI callback URL (or just code): "
-            )
-
         try:
-            await openai_login(on_auth_url=on_auth_url, on_manual_input=on_manual_input)
+            await openai_login(on_auth_url=on_auth_url)
             chat.add_info_message(
                 "Successfully logged in to OpenAI!\n"
                 "You can now use /model to select openai-codex models."

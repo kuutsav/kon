@@ -146,6 +146,12 @@ def _extract_binary(archive_path: Path, binary_name: str, dest: Path) -> Path:
                 tar.extractall(tmp, filter="data")
         elif str(archive_path).endswith(".zip"):
             with zipfile.ZipFile(archive_path) as zf:
+                resolved_tmp = tmp.resolve()
+                for info in zf.infolist():
+                    if not (tmp / info.filename).resolve().is_relative_to(resolved_tmp):
+                        raise ValueError(
+                            f"Zip entry escapes target directory: {info.filename}"
+                        )
                 zf.extractall(tmp)
 
         # Search for the binary: could be at top level or in a subdirectory

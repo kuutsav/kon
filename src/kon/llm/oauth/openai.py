@@ -327,6 +327,12 @@ async def login(
         if on_manual_input:
             manual_task = asyncio.create_task(on_manual_input())
 
+        if not callback_awaitable and not manual_task:
+            raise RuntimeError(
+                "OpenAI OAuth failed: could not start callback server on port 1455 "
+                "and no manual input handler provided."
+            )
+
         if callback_awaitable and manual_task:
             done, pending = await asyncio.wait(
                 {callback_awaitable, manual_task}, return_when=asyncio.FIRST_COMPLETED, timeout=300
@@ -355,8 +361,7 @@ async def login(
 
         if not code:
             raise TimeoutError(
-                "OpenAI OAuth timed out waiting for authorization. "
-                "If callback didn't work, retry and paste the full callback URL when prompted."
+                "OpenAI OAuth timed out waiting for authorization callback on port 1455."
             )
 
         creds = await _exchange_code_for_tokens(code, verifier)

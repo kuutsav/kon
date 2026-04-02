@@ -302,7 +302,7 @@ class QueueDisplay(Vertical):
 
     def __init__(self, **kwargs) -> None:
         super().__init__(**kwargs)
-        self._items: list[str] = []
+        self._items: list[tuple[str, bool]] = []  # (text, is_steer)
 
     def compose(self) -> ComposeResult:
         yield Label("", id="queue-content")
@@ -310,7 +310,7 @@ class QueueDisplay(Vertical):
     def on_mount(self) -> None:
         self.add_class("-hidden")
 
-    def update_items(self, items: list[str]) -> None:
+    def update_items(self, items: list[tuple[str, bool]]) -> None:
         self._items = items
         label = self.query_one("#queue-content", Label)
         if not items:
@@ -320,11 +320,17 @@ class QueueDisplay(Vertical):
 
         self.remove_class("-hidden")
         dim_color = config.ui.colors.dim
+        steer_items = [(text, True) for text, is_steer in items if is_steer]
+        normal_items = [(text, False) for text, is_steer in items if not is_steer]
+        ordered = steer_items + normal_items
+
         result = Text()
         result.append("Queue", style="bold " + dim_color)
-        for item in items:
-            truncated = item if len(item) <= 90 else item[:87] + "..."
+        for text, is_steer in ordered:
+            truncated = text if len(text) <= 90 else text[:87] + "..."
             result.append("\n ↳ ", style=dim_color)
+            if is_steer:
+                result.append("[steer] ", style=dim_color)
             result.append(truncated, style=dim_color)
         label.update(result)
 

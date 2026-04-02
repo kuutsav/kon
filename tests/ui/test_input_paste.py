@@ -1,4 +1,7 @@
+from typing import Protocol, cast
+
 import pytest
+from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 
 from kon.ui import prompt_history as ph
 from kon.ui.input import InputBox
@@ -45,6 +48,10 @@ class _TestableInputBox(InputBox):
 
     def post_message(self, message: InputBox.Submitted):  # type: ignore[override]
         self.posted_messages.append(message)
+
+
+class _KeyBinding(Protocol):
+    value: str
 
 
 def test_large_multiline_paste_collapses_and_expands() -> None:
@@ -94,3 +101,17 @@ def test_submit_keeps_display_text_but_expands_query_text() -> None:
     assert input_box._pastes == {}
     assert input_box._paste_counter == 0
     assert input_box._history._entries[-1] == f"prefix {pasted} suffix"
+
+
+def _sequence_value(key: str) -> str:
+    sequence = cast(list[_KeyBinding], ANSI_SEQUENCES_KEYS[key])
+    first = sequence[0]
+    return first.value
+
+
+def test_legacy_esc_cr_remains_shift_enter_mapping() -> None:
+    assert _sequence_value("\x1b\r") == "shift+enter"
+
+
+def test_alt_enter_uses_csi_u_mapping() -> None:
+    assert _sequence_value("\x1b[13;3u") == "alt+enter"

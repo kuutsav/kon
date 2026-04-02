@@ -166,6 +166,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         self._selection_mode: SelectionMode | None = None
 
         self._pending_queue: deque[tuple[str, str]] = deque(maxlen=QueueDisplay.MAX_QUEUE)
+        self._steer_queue: deque[tuple[str, str]] = deque(maxlen=QueueDisplay.MAX_QUEUE)
+        self._steer_event: asyncio.Event | None = None
         self._exit_hints: list[str] = []
         self._session_start_time: float | None = None
         self._run_turn_metrics: list[tuple[int, float]] = []
@@ -794,10 +796,18 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 highlighted_skill = selected_skill.name
 
         if self._is_running:
-            if len(self._pending_queue) >= QueueDisplay.MAX_QUEUE:
-                self.notify("Queue full (max 5)", severity="warning", timeout=2)
-                return
-            self._pending_queue.append((display_text, query_text))
+            if event.steer:
+                if len(self._steer_queue) >= QueueDisplay.MAX_QUEUE:
+                    self.notify("Steer queue full (max 5)", severity="warning", timeout=2)
+                    return
+                self._steer_queue.append((display_text, query_text))
+                if self._steer_event:
+                    self._steer_event.set()
+            else:
+                if len(self._pending_queue) >= QueueDisplay.MAX_QUEUE:
+                    self.notify("Queue full (max 5)", severity="warning", timeout=2)
+                    return
+                self._pending_queue.append((display_text, query_text))
             self._update_queue_display()
             return
 
@@ -809,7 +819,9 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
     def _update_queue_display(self) -> None:
         queue_display = self.query_one("#queue-display", QueueDisplay)
-        queue_display.update_items([display for display, _ in self._pending_queue])
+        steer_items = [(display, True) for display, _ in self._steer_queue]
+        normal_items = [(display, False) for display, _ in self._pending_queue]
+        queue_display.update_items(steer_items + normal_items)
 
     async def _run_agent(self, prompt: str) -> None:
         chat = self.query_one("#chat-log", ChatLog)
@@ -839,6 +851,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             was_interrupted = False
 
             self._cancel_event = asyncio.Event()
+            self._steer_event = asyncio.Event()
             self._abort_shown = False
             self._current_block_type = None
             if self._interrupt_requested:
@@ -859,7 +872,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
             try:
                 async for event in self._agent.run(
-                    current_prompt, cancel_event=self._cancel_event
+                    current_prompt, cancel_event=self._cancel_event, steer_event=self._steer_event
                 ):
                     match event:
                         case AgentStartEvent():
@@ -1018,13 +1031,23 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
             self._interrupt_requested = False
             self._cancel_event = None
+            self._steer_event = None
             self._clear_approval_state()
             status.set_status("idle")
 
             if was_interrupted:
                 self._pending_queue.clear()
+                self._steer_queue.clear()
                 self._update_queue_display()
                 break
+
+            # Steer messages take priority — drain steer queue first
+            if self._steer_queue:
+                next_display, next_query = self._steer_queue.popleft()
+                self._update_queue_display()
+                chat.add_user_message(next_display)
+                current_prompt = next_query
+                continue
 
             if self._pending_queue:
                 next_display, next_query = self._pending_queue.popleft()

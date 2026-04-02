@@ -12,6 +12,7 @@ class StopReason(StrEnum):
     TOOL_USE = "tool_use"
     ERROR = "error"
     INTERRUPTED = "interrupted"
+    STEER = "steer"
 
 
 class Usage(BaseModel):

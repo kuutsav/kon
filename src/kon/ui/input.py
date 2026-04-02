@@ -29,7 +29,11 @@ if TYPE_CHECKING:
     pass
 
 
+# Preserve ESC+CR as Shift+Enter: some terminals emit that legacy sequence instead
+# of CSI-u modified enter codes. Alt+Enter is handled via the CSI-u Meta/Alt form.
 ANSI_SEQUENCES_KEYS["\x1b\r"] = (SimpleNamespace(value="shift+enter"),)  # type: ignore[assignment]
+ANSI_SEQUENCES_KEYS["\x1b[13;3u"] = (SimpleNamespace(value="alt+enter"),)  # type: ignore[assignment]
+ANSI_SEQUENCES_KEYS["\x1b[13;2u"] = (SimpleNamespace(value="shift+enter"),)  # type: ignore[assignment]
 
 _PASTE_LINE_THRESHOLD = 5
 _PASTE_CHAR_THRESHOLD = 500
@@ -98,6 +102,7 @@ class InputBox(Vertical):
     BINDINGS: ClassVar[list] = [
         Binding("enter", "submit", "Send", priority=True),
         Binding("ctrl+j,shift+enter", "newline", "New line", priority=True),
+        Binding("alt+enter", "steer_submit", "Steer", priority=True),
         Binding("escape", "cancel", "Cancel", priority=True),
         Binding("up", "cursor_up", "Up", priority=True),
         Binding("down", "cursor_down", "Down", priority=True),
@@ -336,9 +341,17 @@ class InputBox(Vertical):
             # Tell app to apply the current selection
             self.post_message(self.CompletionSelect())
             return
-        self._do_submit()
+        self._do_submit(steer=False)
 
-    def _do_submit(self) -> None:
+    def action_steer_submit(self) -> None:
+        if self._is_completing:
+            self._is_completing = False
+            self._active_provider = None
+            self._completion_prefix = ""
+            self.post_message(self.CompletionHide())
+        self._do_submit(steer=True)
+
+    def _do_submit(self, steer: bool = False) -> None:
         raw_text = self.text.strip()
         if not raw_text:
             return
@@ -355,6 +368,7 @@ class InputBox(Vertical):
                 query_text=query_text,
                 selected_skill_name=selected_skill_name,
                 selected_skill_query=selected_skill_query,
+                steer=steer,
             )
         )
         self.clear(reset_pastes=True)
@@ -363,7 +377,7 @@ class InputBox(Vertical):
         self._is_completing = False
         self._active_provider = None
         self._completion_prefix = ""
-        self._do_submit()
+        self._do_submit(steer=False)
 
     def action_newline(self) -> None:
         self.query_one("#input-textarea", TextArea).insert("\n")
@@ -616,12 +630,14 @@ class InputBox(Vertical):
             query_text: str | None = None,
             selected_skill_name: str | None = None,
             selected_skill_query: str | None = None,
+            steer: bool = False,
         ) -> None:
             super().__init__()
             self.text = text
             self.query_text = query_text if query_text is not None else text
             self.selected_skill_name = selected_skill_name
             self.selected_skill_query = selected_skill_query
+            self.steer = steer
 
     class CompletionUpdate(Message):
         def __init__(self, items: list[ListItem]) -> None:

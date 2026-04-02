@@ -142,6 +142,32 @@ async def test_agent_max_turns_limit(tools, in_memory_session, max_turns_one):
 
 
 @pytest.mark.asyncio
+async def test_agent_steer_stop_reason_is_not_overwritten_by_length(
+    tools, in_memory_session, max_turns_one
+):
+    provider = MockProvider(scenario="default")
+    agent = Agent(provider, tools, in_memory_session)
+    steer_event = asyncio.Event()
+    events = []
+
+    async def trigger_steer() -> None:
+        await asyncio.sleep(0)
+        steer_event.set()
+
+    steer_task = asyncio.create_task(trigger_steer())
+
+    async for event in agent.run("Test", steer_event=steer_event):
+        events.append(event)
+
+    await steer_task
+
+    agent_end = events[-1]
+    assert isinstance(agent_end, AgentEndEvent)
+    assert agent_end.total_turns == 1
+    assert agent_end.stop_reason == StopReason.STEER
+
+
+@pytest.mark.asyncio
 async def test_agent_usage_tracking(tools, in_memory_session, max_turns_one):
     provider = MockProvider(scenario="default")
     agent = Agent(provider, tools, in_memory_session)
@@ -568,12 +594,14 @@ async def test_run_single_turn_cancel_during_retry_backoff(sample_messages, tool
         await asyncio.sleep(0.01)
         cancel_event.set()
 
-    asyncio.create_task(cancel_soon())
+    cancel_task = asyncio.create_task(cancel_soon())
 
     async for event in run_single_turn(
         provider, sample_messages, tools, turn=1, cancel_event=cancel_event, retry_delays=[1, 1, 1]
     ):
         events.append(event)
+
+    await cancel_task
 
     retry_events = [e for e in events if isinstance(e, RetryEvent)]
     assert len(retry_events) == 1

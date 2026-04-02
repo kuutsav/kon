@@ -133,6 +133,7 @@ class Agent:
         query: str,
         images: list[ImageContent] | None = None,
         cancel_event: asyncio.Event | None = None,
+        steer_event: asyncio.Event | None = None,
     ) -> AsyncIterator[Event]:
         self._run_usage = Usage()
 
@@ -159,6 +160,10 @@ class Agent:
                     was_interrupted = True
                     stop_reason = StopReason.INTERRUPTED
                     yield InterruptedEvent(message="Interrupted by user")
+                    break
+
+                if steer_event and steer_event.is_set():
+                    stop_reason = StopReason.STEER
                     break
 
                 turn += 1
@@ -191,6 +196,10 @@ class Agent:
                     stop_reason = StopReason.INTERRUPTED
                     break
 
+                if steer_event and steer_event.is_set():
+                    stop_reason = StopReason.STEER
+                    break
+
                 # Check for context overflow after each turn.
                 # We iterate events instead of awaiting a single compaction result so
                 # CompactionStartEvent can be forwarded immediately and the UI can
@@ -211,7 +220,7 @@ class Agent:
                 if stop_reason != StopReason.TOOL_USE:
                     break
 
-            if turn >= max_turns and not was_interrupted:
+            if turn >= max_turns and not was_interrupted and stop_reason == StopReason.TOOL_USE:
                 stop_reason = StopReason.LENGTH
 
         except Exception as e:  # intentionally broad — top-level boundary; crash = broken TUI

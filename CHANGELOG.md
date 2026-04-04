@@ -30,7 +30,6 @@ All notable changes to this project will be documented in this file.
 - Added tool permission controls with bash safety analysis - @Meltedd.
 - Added popular built-in themes.
 - Added tool previews in approval prompts.
-- Added run token throughput metrics.
 
 ### Changed
 

@@ -26,7 +26,6 @@ Cancellation handling:
 import asyncio
 import contextlib
 import json
-import time
 from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from enum import StrEnum
@@ -296,8 +295,6 @@ async def run_single_turn(
 
     content: list[TextContent | ThinkingContent | ToolCall] = []
     tool_results: list[ToolResultMessage] = []
-    generation_start = time.perf_counter()
-    generation_end: float | None = None
     tool_call_count = 0
 
     think_buffer: list[str] = []
@@ -535,9 +532,6 @@ async def run_single_turn(
         for finalize_event in _finalize_current_state(include_empty=False):
             yield finalize_event
 
-    generation_end = time.perf_counter()
-    generation_seconds = max(0.001, generation_end - generation_start)
-
     # Process all pending tool calls:
     # 1. First, yield all ToolEndEvents (UI shows all tools in pending state)
     # 2. Then execute each tool and yield ToolResultEvent
@@ -612,6 +606,5 @@ async def run_single_turn(
         assistant_message=assistant_message,
         tool_results=tool_results,
         stop_reason=stop_reason,
-        generation_seconds=generation_seconds,
         tool_call_count=tool_call_count,
     )

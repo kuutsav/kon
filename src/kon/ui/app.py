@@ -60,7 +60,6 @@ from ..llm import (
     resolve_provider_api_type,
 )
 from ..loop import Agent, build_system_prompt
-from ..metrics import append_run_metric
 from ..permissions import ApprovalResponse
 from ..session import Session
 from ..tools import DEFAULT_TOOLS, EXTRA_TOOLS, get_tool, get_tools
@@ -174,9 +173,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         self._steer_event: asyncio.Event | None = None
         self._exit_hints: list[str] = []
         self._session_start_time: float | None = None
-        self._run_turn_metrics: list[tuple[int, float]] = []
-        self._run_tool_call_count = 0
-        self._run_stop_reason: StopReason = StopReason.STOP
 
         self._provider: BaseProvider | None = None
         self._session: Session | None = None
@@ -871,10 +867,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             self._agent.config.context_window = model_info.context_window if model_info else None
             self._agent.config.max_output_tokens = model_info.max_tokens if model_info else None
 
-            self._run_turn_metrics = []
-            self._run_tool_call_count = 0
-            self._run_stop_reason = StopReason.STOP
-            status.set_run_tps(None)
             status.set_status("working")
 
             try:
@@ -923,7 +915,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                             icon = tool.tool_icon if tool else "→"
                             chat.start_tool(name, id, "", icon=icon)
                             self._current_block_type = "tool_call"
-                            self._run_tool_call_count += 1
                             status.increment_tool_calls()
                             status.set_streaming_tokens(0)  # Reset token count for new tool
 
@@ -966,11 +957,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                                     usage.cache_read_tokens,
                                     usage.cache_write_tokens,
                                 )
-                                if event.generation_seconds and usage.output_tokens > 0:
-                                    self._run_turn_metrics.append(
-                                        (usage.output_tokens, event.generation_seconds)
-                                    )
-                            self._run_stop_reason = event.stop_reason
 
                         case InterruptedEvent():
                             was_interrupted = True
@@ -1001,28 +987,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                             chat.add_info_message(str(w), warning=True)
 
                         case AgentEndEvent(stop_reason=reason):
-                            self._run_stop_reason = reason
-                            total_output_tokens = sum(
-                                output for output, _ in self._run_turn_metrics
-                            )
-                            total_generation_seconds = sum(
-                                seconds for _, seconds in self._run_turn_metrics
-                            )
-                            run_tps = None
-                            if total_output_tokens > 0 and total_generation_seconds > 0:
-                                run_tps = total_output_tokens / total_generation_seconds
-                            status.set_run_tps(run_tps)
-                            if self._provider and self._session and self._run_turn_metrics:
-                                append_run_metric(
-                                    session_id=self._session.id,
-                                    provider=self._model_provider
-                                    or self._provider.config.provider
-                                    or self._provider.name,
-                                    model=self._model,
-                                    turn_metrics=self._run_turn_metrics,
-                                    tool_call_count=self._run_tool_call_count,
-                                    stop_reason=reason.value,
-                                )
                             if reason == StopReason.INTERRUPTED:
                                 was_interrupted = True
                             if self._current_block_type:

@@ -41,7 +41,6 @@ class TurnEndEvent:
     assistant_message: AssistantMessage | None = None
     tool_results: list[ToolResultMessage] = field(default_factory=list)
     stop_reason: StopReason = StopReason.STOP
-    generation_seconds: float | None = None
     tool_call_count: int = 0
 
 

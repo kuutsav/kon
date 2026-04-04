@@ -81,8 +81,6 @@ async def test_agent_default_scenario(tools, in_memory_session, max_turns_one):
     assert tool_starts[1].tool_name == "bash"
 
     turn_end = next(e for e in events if isinstance(e, TurnEndEvent))
-    assert turn_end.generation_seconds is not None
-    assert turn_end.generation_seconds > 0
     assert turn_end.tool_call_count == 2
 
     # Check final state
@@ -111,8 +109,6 @@ async def test_agent_simple_text_scenario(tools, in_memory_session):
 
     turn_end = events[5]
     assert isinstance(turn_end, TurnEndEvent)
-    assert turn_end.generation_seconds is not None
-    assert turn_end.generation_seconds > 0
     assert turn_end.tool_call_count == 0
 
     # Check final state

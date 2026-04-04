@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import pytest
 
 from kon import get_config, reset_config
@@ -45,13 +43,6 @@ class FakeChat:
 
     def show_status(self, message: str) -> None:
         self.statuses.append(message)
-
-
-@pytest.fixture(autouse=True)
-def isolate_turn_metrics(monkeypatch, tmp_path: Path) -> None:
-    monkeypatch.setattr(
-        "kon.metrics.get_turn_metrics_path", lambda: tmp_path / "turn-metrics.jsonl"
-    )
 
 
 @pytest.fixture

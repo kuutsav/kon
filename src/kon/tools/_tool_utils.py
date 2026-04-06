@@ -4,6 +4,8 @@ from contextlib import suppress
 
 from ..async_utils import OperationCancelledError, await_or_cancel
 
+_SUBPROCESS_DRAIN_TIMEOUT_SECONDS = 1.0
+
 
 class ToolCancelledError(Exception):
     pass
@@ -29,22 +31,27 @@ async def communicate_or_cancel(
             [comm_task, cancel], return_when=asyncio.FIRST_COMPLETED
         )
 
-        for task in pending:
-            task.cancel()
-            with suppress(asyncio.CancelledError):
-                await task
-
         if cancel in done and cancel_event.is_set():
             if proc.returncode is None:
                 with suppress(ProcessLookupError):
                     proc.kill()
                 with suppress(ProcessLookupError):
-                    await proc.wait()
+                    await asyncio.wait_for(proc.wait(), _SUBPROCESS_DRAIN_TIMEOUT_SECONDS)
             if not comm_task.done():
-                comm_task.cancel()
-                with suppress(asyncio.CancelledError):
-                    await comm_task
+                with suppress(asyncio.CancelledError, TimeoutError):
+                    await asyncio.wait_for(
+                        asyncio.shield(comm_task), _SUBPROCESS_DRAIN_TIMEOUT_SECONDS
+                    )
+                if not comm_task.done():
+                    comm_task.cancel()
+                    with suppress(asyncio.CancelledError):
+                        await comm_task
             raise ToolCancelledError
+
+        for task in pending:
+            task.cancel()
+            with suppress(asyncio.CancelledError):
+                await task
 
         return comm_task.result()
     finally:

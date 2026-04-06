@@ -18,6 +18,7 @@ from .base import BaseTool
 DEFAULT_TIMEOUT = 180
 MAX_OUTPUT_BYTES = 50 * 1024
 MAX_OUTPUT_LINES = 2000
+_SUBPROCESS_DRAIN_TIMEOUT_SECONDS = 1.0
 
 _IS_WINDOWS: bool = sys.platform == "win32"
 _ANSI_ESCAPE_RE = re.compile(r"\x1b\[[0-9;]*[a-zA-Z]|\x1b\][^\x07]*\x07|\x1b[()][AB012]")
@@ -219,12 +220,11 @@ class BashTool(BaseTool):
                         return_when=asyncio.FIRST_COMPLETED,
                     )
 
-                    for task in pending:
-                        task.cancel()
-                        with contextlib.suppress(asyncio.CancelledError):
-                            await task
-
                     if not done:
+                        for task in pending:
+                            task.cancel()
+                            with contextlib.suppress(asyncio.CancelledError):
+                                await task
                         await _kill_process_tree(proc)
                         return ToolResult(
                             success=False,
@@ -233,11 +233,25 @@ class BashTool(BaseTool):
 
                     if cancel_wait in done and cancel_event.is_set():
                         await _kill_process_tree(proc)
+                        if not comm_task.done():
+                            with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+                                await asyncio.wait_for(
+                                    asyncio.shield(comm_task), _SUBPROCESS_DRAIN_TIMEOUT_SECONDS
+                                )
+                            if not comm_task.done():
+                                comm_task.cancel()
+                                with contextlib.suppress(asyncio.CancelledError):
+                                    await comm_task
                         return ToolResult(
                             success=False,
                             result="Command aborted",
                             ui_summary="[yellow]Command aborted by user[/yellow]",
                         )
+
+                    for task in pending:
+                        task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await task
 
                     stdout_bytes, stderr_bytes = comm_task.result()
                 else:
@@ -247,6 +261,15 @@ class BashTool(BaseTool):
 
             except TimeoutError:
                 await _kill_process_tree(proc)
+                if comm_task is not None and not comm_task.done():
+                    with contextlib.suppress(asyncio.CancelledError, TimeoutError):
+                        await asyncio.wait_for(
+                            asyncio.shield(comm_task), _SUBPROCESS_DRAIN_TIMEOUT_SECONDS
+                        )
+                    if not comm_task.done():
+                        comm_task.cancel()
+                        with contextlib.suppress(asyncio.CancelledError):
+                            await comm_task
                 return ToolResult(
                     success=False,
                     ui_summary=f"[red]Command timed out after {params.timeout}s[/red]",

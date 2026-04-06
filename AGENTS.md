@@ -7,7 +7,7 @@
 
 ## Testing
 
-- Use `uv run pytest` for testing in general; after edits/writes
+- Use `uv run python -m pytest` for testing in general; after edits/writes
 - If the user asks for e2e tests then run the kon-tmux e2e test if available
 
 ## Committing code
@@ -17,5 +17,5 @@
 
 ## Pushing
 
-- If the user asks you to push code, run these first before doing so: `uv run ruff format .`, `uv run ruff check .`, `uv run pyright .` and `uv run pytest` in parallel (same tool call)
+- If the user asks you to push code, run these first before doing so: `uv run ruff format .`, `uv run ruff check .`, `uv run python -m pyright .` and `uv run python -m pytest` in parallel (same tool call)
 - Only if these all pass without issues should you push otherwise report the warnings/errors back to user and ask for next steps

@@ -226,7 +226,7 @@ class Session:
             self._flushed = True
             self._persisted_entries_count = len(self._entries)
         else:
-            with open(self._session_file, "a") as f:
+            with open(self._session_file, "a", encoding="utf-8") as f:
                 f.write(entry.model_dump_json() + "\n")
             self._persisted_entries_count += 1
 
@@ -236,7 +236,7 @@ class Session:
 
         self._session_file.parent.mkdir(parents=True, exist_ok=True)
 
-        with open(self._session_file, "w") as f:
+        with open(self._session_file, "w", encoding="utf-8") as f:
             if self._header:
                 f.write(self._header.model_dump_json() + "\n")
             for entry in self._entries:
@@ -469,7 +469,7 @@ class Session:
         header: SessionHeader | None = None
         entries: list[SessionEntry] = []
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:
@@ -605,7 +605,7 @@ class Session:
         message_count = 0
         first_message = ""
 
-        with open(path) as f:
+        with open(path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if not line:

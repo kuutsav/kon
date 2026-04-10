@@ -4,6 +4,7 @@
 
 - Don't add trivial docstrings. Only add docstrings when explaining complex functionality.
 - This project uses `uv`. Run `uv run ruff format .` after editing or creating any files.
+- If generating and running a Python script, use `uv run python` instead of `python`.
 
 ## Testing
 

@@ -6,6 +6,11 @@ build-backend = "hatchling.build"
 packages = ["src/kon"]
 
 [tool.uv]
+package = true
+
+[[tool.uv.index]]
+url = "https://pypi.org/simple"
+default = true
 
 [project]
 name = "kon-coding-agent"

@@ -4,6 +4,7 @@ import os
 import shutil
 import time
 import tomllib
+import uuid
 from collections import deque
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
@@ -787,6 +788,11 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         if display_text.startswith("/") and self._handle_command(display_text):
             return
 
+        if event.shell_cmd:
+            chat = self.query_one("#chat-log", ChatLog)
+            self.run_worker(self._run_shell_command(event.shell_cmd), exclusive=True)
+            return
+
         query_text = event.query_text.strip()
 
         skill_prompt: str | None = None
@@ -841,6 +847,48 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         steer_items = [(display, True) for display, _ in self._steer_queue]
         normal_items = [(display, False) for display, _ in self._pending_queue]
         queue_display.update_items(steer_items + normal_items)
+
+    async def _run_shell_command(self, command: str) -> None:
+        from ..core.types import ToolResult
+        from ..tools.bash import BashTool
+
+        chat = self.query_one("#chat-log", ChatLog)
+        status = self.query_one("#status-line", StatusLine)
+
+        self._is_running = True
+        status.set_status("working")
+        self._cancel_event = asyncio.Event()
+
+        tool_call_id = f"manual-{uuid.uuid4().hex[:8]}"
+        bash_tool = BashTool()
+
+        chat.add_user_message(f"! {command}")
+        chat.start_tool(
+            name="bash", tool_id=tool_call_id, call_msg=f"Executing: {command}", icon="!"
+        )
+
+        try:
+            result: ToolResult = await bash_tool.execute(bash_tool.params(command=command))
+            chat.set_tool_result(
+                tool_id=tool_call_id,
+                ui_summary=result.ui_summary,
+                ui_details=result.result,
+                success=result.success,
+                markup=False,
+            )
+        except Exception as e:
+            chat.set_tool_result(
+                tool_id=tool_call_id,
+                ui_summary="Error",
+                ui_details=f"Error executing shell command: {e}",
+                success=False,
+                markup=False,
+            )
+            chat.add_info_message(f"Error executing shell command: {e}", error=True)
+        finally:
+            self._is_running = False
+            self._cancel_event = None
+            status.set_status("idle")
 
     async def _run_agent(self, prompt: str) -> None:
         chat = self.query_one("#chat-log", ChatLog)

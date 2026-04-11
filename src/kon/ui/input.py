@@ -351,10 +351,23 @@ class InputBox(Vertical):
             self.post_message(self.CompletionHide())
         self._do_submit(steer=True)
 
+    def _detect_shell_command(self, text: str) -> str | None:
+        if text.startswith("!"):
+            return text[1:].strip()
+        return None
+
     def _do_submit(self, steer: bool = False) -> None:
         raw_text = self.text.strip()
         if not raw_text:
             return
+
+        shell_cmd = self._detect_shell_command(raw_text)
+
+        if shell_cmd:
+            self.post_message(self.Submitted(raw_text, shell_cmd=shell_cmd, steer=steer))
+            self.clear(reset_pastes=True)
+            return
+
         query_text = self._expand_paste_markers(raw_text)
         selected_skill_name, selected_skill_query = self._extract_selected_skill_submission(
             query_text
@@ -630,6 +643,7 @@ class InputBox(Vertical):
             query_text: str | None = None,
             selected_skill_name: str | None = None,
             selected_skill_query: str | None = None,
+            shell_cmd: str | None = None,
             steer: bool = False,
         ) -> None:
             super().__init__()
@@ -638,6 +652,7 @@ class InputBox(Vertical):
             self.selected_skill_name = selected_skill_name
             self.selected_skill_query = selected_skill_query
             self.steer = steer
+            self.shell_cmd = shell_cmd
 
     class CompletionUpdate(Message):
         def __init__(self, items: list[ListItem]) -> None:

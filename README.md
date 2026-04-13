@@ -210,6 +210,18 @@ Kon supports direct shell command execution from the input box. Simply prefix yo
 !python -m pytest tests/
 ```
 
+Use `!!` to also send the command output back to the LLM for a follow-up response:
+
+```bash
+!!grep -r "TODO" src/
+!!find . -name "*.py" | head -20
+```
+
+| Prefix | Behavior |
+| --- | --- |
+| `!` | Run the command and show the result in chat |
+| `!!` | Run the command, show the result, **and** send the output to the LLM for a response |
+
 This provides a quick way to run commands without switching to a separate terminal.
 
 ### Extra tools

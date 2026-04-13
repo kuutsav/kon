@@ -76,6 +76,7 @@ class LLMConfig(BaseModel):
     default_thinking_level: str
     system_prompt: SystemPromptConfig
     tool_call_idle_timeout_seconds: float = 180
+    request_timeout_seconds: float = 600
     auth: AuthConfig = AuthConfig()
 
 

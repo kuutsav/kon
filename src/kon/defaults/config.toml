@@ -11,6 +11,9 @@ default_thinking_level = "high"
 # Abort a tool call if it stays idle for this long during a turn.
 # Helps prevent stalled tool executions from hanging the agent loop.
 tool_call_idle_timeout_seconds = 180
+# HTTP request timeout for LLM API calls (in seconds).
+# Local models (e.g. llama.cpp) may need a higher value for long compaction requests.
+request_timeout_seconds = 600
 
 [llm.auth]
 # Auth policy for OpenAI-compatible and Anthropic-compatible endpoints.

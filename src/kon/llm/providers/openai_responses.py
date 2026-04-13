@@ -2,6 +2,7 @@ import json
 from collections.abc import AsyncIterator
 from typing import Any
 
+from kon import config as kon_config
 from openai import APIStatusError, AsyncOpenAI, RateLimitError
 
 from ...core.types import (
@@ -51,6 +52,7 @@ class OpenAIResponsesProvider(BaseProvider):
                 api_key=self.config.api_key,
                 base_url=self.config.base_url,
                 default_headers=self._headers,
+                timeout=kon_config.llm.request_timeout_seconds,
             )
         return self._client
 

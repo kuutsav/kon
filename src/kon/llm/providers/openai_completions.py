@@ -3,6 +3,7 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any, Literal, cast
 
+from kon import config as kon_config
 from openai import APIStatusError, AsyncOpenAI, RateLimitError
 from openai.types.chat import (
     ChatCompletionChunk,
@@ -99,7 +100,11 @@ class OpenAICompletionsProvider(BaseProvider):
                 "Set OPENAI_API_KEY or ZAI_API_KEY environment variable, "
                 'or configure llm.auth.openai_compat = "auto"/"none" for local endpoints.'
             )
-        self._client = AsyncOpenAI(api_key=api_key, base_url=config.base_url)
+        self._client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=config.base_url,
+            timeout=kon_config.llm.request_timeout_seconds,
+        )
         self._compat = _detect_compat(
             config.provider or "", config.base_url or "", config.model or ""
         )

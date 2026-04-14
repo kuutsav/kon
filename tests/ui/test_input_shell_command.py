@@ -45,7 +45,7 @@ def test_detect_shell_command_with_valid_command():
     # Test with a valid shell command
     command, add_to_history = input_box._detect_shell_command("!ls -la")
     assert command == "ls -la"
-    assert add_to_history == False
+    assert add_to_history is False
 
 
 def test_detect_shell_command_with_empty_command():
@@ -54,7 +54,7 @@ def test_detect_shell_command_with_empty_command():
     # Test with empty command after !
     command, add_to_history = input_box._detect_shell_command("!")
     assert command == ""
-    assert add_to_history == False
+    assert add_to_history is False
 
 
 def test_detect_shell_command_with_whitespace():
@@ -81,7 +81,7 @@ def test_detect_shell_command_with_complex_command():
         "!!grep -r 'pattern' /path/to/dir | wc -l"
     )
     assert command == "grep -r 'pattern' /path/to/dir | wc -l"
-    assert add_to_history == True
+    assert add_to_history is True
 
 
 def test_submit_shell_command_posts_correct_message():

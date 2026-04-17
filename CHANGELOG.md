@@ -6,6 +6,44 @@ All notable changes to this project will be documented in this file.
 
 - No changes yet.
 
+## 0.3.4 - 2026-04-10
+
+### Fixed
+
+- Fixed Windows UTF-8 encoding errors in file operations - @sukhbinder.
+- Fixed local Gemma model thinking block compatibility.
+- Removed duplicate force-include for builtin skills in build config.
+
+### Changed
+
+- Updated local model documentation.
+
+## 0.3.3 - 2026-04-08
+
+### Added
+
+- Added queued agent steering between turns - @0xku.
+- Added bundled `/init` slash command for project scaffolding - @0xku.
+- Added help info for queue and steer queue commands.
+- Added GLM-5.1 support for zai provider.
+
+### Changed
+
+- Improved read tool directory listings.
+- Updated README with steer queue documentation.
+- Added `$` icon for bash, `%` for web tools, and `←` for edit tool.
+- Used muted color for shortcut key hints in exit/delete prompts.
+
+### Fixed
+
+- Let ESC interrupt retry backoff immediately - @0xku.
+- Fixed OpenAI login stdin leak by removing orphaned thread - @Meltedd.
+- Fixed OpenAI and Anthropic local compat with auth flags.
+- Fixed interrupt handling before handoff thread switch.
+- Fixed subprocess communication drain on cancellation/timeout.
+- Added zipfile path traversal validation.
+- Removed token throughput metrics.
+
 ## 0.3.2 - 2026-03-22
 
 ### Added

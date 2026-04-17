@@ -33,38 +33,44 @@ Use this skill when the user asks to cut a new Kon version, tag it, publish to P
    - `git status --short --branch` must be clean (or confirm with user)
    - `git tag --list` and `git log --oneline <prev_tag>..HEAD` to summarize changes
 
-2. **Version bump**
+2. **Update CHANGELOG.md**
+   - Replace the `## [Unreleased]` section's `- No changes yet.` with a new versioned heading: `## <version> - YYYY-MM-DD`
+   - Use `git log --oneline <prev_tag>..HEAD` to categorize changes into `### Added`, `### Changed`, `### Fixed` sections
+   - Credit external contributors with `- @username`
+   - Commit message: `docs: update changelog for <version>`
+
+3. **Version bump**
    - Update version in all 3 files above
 
-3. **Quality gates**
+4. **Quality gates**
    - `uv run ruff format .`
    - `uv run ruff check .`
    - `uv run pyright .`
    - `uv run pytest`
 
-4. **Commit**
+5. **Commit**
    - Commit message: `build: bump version to <version>`
 
-5. **Tag**
+6. **Tag**
    - Annotated tag: `git tag -a v<version> -m "v<version> ..."`
-   - Include concise “changes since previous tag” bullets
+   - Include concise "changes since previous tag" bullets
 
-6. **Push**
+7. **Push**
    - `git push origin main`
    - `git push origin v<version>`
 
-7. **Build + verify artifacts**
+8. **Build + verify artifacts**
    - `rm -rf dist && uv build`
    - `uv run python -m twine check dist/*`
 
-8. **Publish to PyPI**
+9. **Publish to PyPI**
    - Prefer token file if present (example `~/.pypi-token`):
    - `TWINE_USERNAME=__token__ TWINE_PASSWORD="$(< ~/.pypi-token)" uv run python -m twine upload dist/*`
    - Verify:
      - `https://pypi.org/project/kon-coding-agent/<version>/`
      - `https://pypi.org/pypi/kon-coding-agent/json` reports latest version
 
-9. **Create GitHub release**
+10. **Create GitHub release**
    - If token exists at `~/.github-token`, call Releases API:
    - `POST /repos/<owner>/<repo>/releases` with:
      - `tag_name: v<version>`
@@ -83,6 +89,7 @@ Use this skill when the user asks to cut a new Kon version, tag it, publish to P
 
 ## Output checklist to report
 
+- Changelog updated for `<version>`
 - Version bumped in all files
 - Checks passed
 - Commit hash

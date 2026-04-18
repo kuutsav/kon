@@ -346,6 +346,7 @@ Extra tools:
             model_id=self._model,
             thinking_level=self._thinking_level,
             system_prompt=self._resolve_system_prompt(),
+            tools=[t.name for t in self._tools],
         )
         model_base_url = (
             selected_model.base_url
@@ -674,14 +675,11 @@ Extra tools:
             chat.add_info_message("Session has no messages to export")
             return
 
-        provider_name = self._provider.name if self._provider else "unknown"
-
         try:
             path = export_session_html(
-                session=self._session,
+                cwd=self._cwd,
+                session_id=self._session.id,
                 output_dir=self._cwd,
-                model_id=self._model,
-                provider=provider_name,
                 version=getattr(self, "VERSION", ""),
             )
             chat.add_info_message(f"Session exported to {path.name}")

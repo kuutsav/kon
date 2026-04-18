@@ -6,11 +6,13 @@ with a type field. The first line is always the session header.
 
 Structure:
     {"type": "header", "id": "...", "version": 1, "timestamp": "...",
-     "cwd": "...", "system_prompt": "..."}
+     "cwd": "...", "system_prompt": "...", "tools": ["read", "edit", ...]}
     {"type": "message", "id": "...", "parent_id": "...", "timestamp": "...", "message": {...}}
     {"type": "message", "id": "...", "parent_id": "...", "timestamp": "...", "message": {...}}
     ...
 """
+
+from __future__ import annotations
 
 import json
 import re
@@ -49,6 +51,7 @@ class SessionHeader(BaseModel):
     timestamp: str
     cwd: str
     system_prompt: str | None = None
+    tools: list[str] | None = None
     initial_thinking_level: str = "high"
 
 
@@ -225,6 +228,10 @@ class Session:
     @property
     def system_prompt(self) -> str | None:
         return self._header.system_prompt if self._header else None
+
+    @property
+    def tools(self) -> list[str] | None:
+        return self._header.tools if self._header else None
 
     @property
     def created_at(self) -> str | None:
@@ -547,7 +554,8 @@ class Session:
         model_id: str | None = None,
         thinking_level: str = "high",
         system_prompt: str | None = None,
-    ) -> "Session":
+        tools: list[str] | None = None,
+    ) -> Session:
         session_id = str(uuid.uuid4())
         timestamp = _now_iso()
 
@@ -564,6 +572,7 @@ class Session:
             timestamp=timestamp,
             cwd=cwd,
             system_prompt=system_prompt,
+            tools=tools,
             initial_thinking_level=thinking_level,
         )
 
@@ -575,7 +584,7 @@ class Session:
         return session
 
     @classmethod
-    def load(cls, path: Path | str) -> "Session":
+    def load(cls, path: Path | str) -> Session:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Session file not found: {path}")
@@ -638,7 +647,7 @@ class Session:
         model_id: str | None = None,
         thinking_level: str = "high",
         system_prompt: str | None = None,
-    ) -> "Session":
+    ) -> Session:
         sessions_dir = cls.get_sessions_dir(cwd)
 
         jsonl_files = list(sessions_dir.glob("*.jsonl"))
@@ -655,7 +664,7 @@ class Session:
         return cls.load(most_recent)
 
     @classmethod
-    def continue_by_id(cls, cwd: str, session_id: str) -> "Session":
+    def continue_by_id(cls, cwd: str, session_id: str) -> Session:
         normalized_id = session_id.strip().lower()
         if not normalized_id:
             raise ValueError("Session ID cannot be empty")
@@ -774,7 +783,8 @@ class Session:
         model_id: str | None = None,
         thinking_level: str = "high",
         system_prompt: str | None = None,
-    ) -> "Session":
+        tools: list[str] | None = None,
+    ) -> Session:
         return cls.create(
             cwd,
             persist=False,
@@ -782,4 +792,5 @@ class Session:
             model_id=model_id,
             thinking_level=thinking_level,
             system_prompt=system_prompt,
+            tools=tools,
         )

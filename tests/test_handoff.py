@@ -248,7 +248,13 @@ def test_clear_conversation_creates_session_with_persisted_system_prompt(monkeyp
     original_create = Session.create
 
     def _fake_create(
-        cwd, persist=True, provider=None, model_id=None, thinking_level="high", system_prompt=None
+        cwd,
+        persist=True,
+        provider=None,
+        model_id=None,
+        thinking_level="high",
+        system_prompt=None,
+        tools=None,
     ):
         captured["system_prompt"] = system_prompt
         return original_create(
@@ -258,6 +264,7 @@ def test_clear_conversation_creates_session_with_persisted_system_prompt(monkeyp
             model_id=model_id,
             thinking_level=thinking_level,
             system_prompt=system_prompt,
+            tools=tools,
         )
 
     monkeypatch.setattr("kon.ui.commands.Session.create", _fake_create)

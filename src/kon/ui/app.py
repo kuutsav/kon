@@ -395,6 +395,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 model_id=self._model,
                 thinking_level=self._thinking_level,
                 system_prompt=self._resolve_system_prompt(None),
+                tools=[t.name for t in self._tools],
             )
             if model_provider:
                 self._session.append_model_change(model_provider, self._model, base_url)

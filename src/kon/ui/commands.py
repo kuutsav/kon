@@ -8,7 +8,7 @@ from kon import config, set_theme
 
 from ..core.compaction import generate_summary
 from ..core.handoff import generate_handoff_prompt
-from ..core.types import AssistantMessage, ToolCall, ToolResultMessage
+from ..core.types import AssistantMessage
 from ..llm import (
     ApiType,
     BaseProvider,
@@ -156,7 +156,6 @@ Extra tools:
             if self._provider:
                 self._provider.config.session_id = self._session.id
             info_bar = self.query_one("#info-bar", InfoBar)
-            info_bar.set_session_id(self._session.id[:8])
             info_bar.set_tokens(0, 0, 0, 0)
             info_bar.set_file_changes({})
         chat = self.query_one("#chat-log", ChatLog)
@@ -289,8 +288,6 @@ Extra tools:
 
         info_bar.set_tokens(0, 0, 0, 0)
         info_bar.set_file_changes({})
-        if self._session:
-            info_bar.set_session_id(self._session.id[:8])
         info_bar.set_thinking_level(self._thinking_level)
 
         chat.add_session_info(getattr(self, "VERSION", ""))
@@ -330,6 +327,11 @@ Extra tools:
         chat.show_spinner_status("Creating handoff...")
         self.run_worker(self._do_handoff(query), exclusive=False)
 
+    def _resolve_system_prompt(self, session: Session | None = None) -> str:
+        return (session.system_prompt if session else None) or build_system_prompt(
+            self._cwd, tools=self._tools
+        )
+
     def _create_new_session(self) -> Session:
         selected_model = get_model(self._model, self._model_provider)
         model_provider = (
@@ -338,13 +340,12 @@ Extra tools:
             else (self._provider.name if self._provider else "openai")
         )
         self._model_provider = model_provider
-        system_prompt = build_system_prompt(self._cwd, tools=self._tools)
         session = Session.create(
             self._cwd,
             provider=model_provider,
             model_id=self._model,
             thinking_level=self._thinking_level,
-            system_prompt=system_prompt,
+            system_prompt=self._resolve_system_prompt(),
         )
         model_base_url = (
             selected_model.base_url
@@ -420,67 +421,31 @@ Extra tools:
         session_file = self._session.session_file
         file_path = str(session_file) if session_file else "(in-memory session)"
 
-        full_id = self._session._header.id if self._session._header else self._session.id
+        counts = self._session.message_counts()
+        token_totals = self._session.token_totals()
 
-        user_count = 0
-        assistant_count = 0
-        tool_call_count = 0
-        tool_result_count = 0
-
-        for entry in self._session.entries:
-            if isinstance(entry, MessageEntry):
-                message = entry.message
-                if message.role == "user":
-                    user_count += 1
-                elif message.role == "assistant":
-                    assistant_count += 1
-                    for part in message.content:
-                        if isinstance(part, ToolCall):
-                            tool_call_count += 1
-
-        tool_result_count = sum(
-            1
-            for e in self._session.entries
-            if isinstance(e, MessageEntry) and isinstance(e.message, ToolResultMessage)
-        )
-
-        total_messages = user_count + assistant_count
-
-        input_tokens = 0
-        output_tokens = 0
-        cache_read_tokens = 0
-        cache_write_tokens = 0
-        for entry in self._session.entries:
-            if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
-                usage = entry.message.usage
-                if usage:
-                    input_tokens += usage.input_tokens
-                    output_tokens += usage.output_tokens
-                    cache_read_tokens += usage.cache_read_tokens
-                    cache_write_tokens += usage.cache_write_tokens
-
-        total_tokens = input_tokens + output_tokens + cache_read_tokens + cache_write_tokens
+        total_messages = counts.total_messages
 
         lines = [
             "Session Info",
             "",
             "File:",
             f"{file_path}",
-            f"ID: {full_id}",
+            f"ID: {self._session.id}",
             "",
             "Messages",
-            f"User: {user_count}",
-            f"Assistant: {assistant_count}",
-            f"Tool Calls: {tool_call_count}",
-            f"Tool Results: {tool_result_count}",
+            f"User: {counts.user_messages}",
+            f"Assistant: {counts.assistant_messages}",
+            f"Tool Calls: {counts.tool_calls}",
+            f"Tool Results: {counts.tool_results}",
             f"Total: {total_messages}",
             "",
             "Tokens",
-            f"Input: {input_tokens:,}",
-            f"Output: {output_tokens:,}",
-            f"Cache read: {cache_read_tokens:,}",
-            f"Cache write: {cache_write_tokens:,}",
-            f"Total: {total_tokens:,}",
+            f"Input: {token_totals.input_tokens:,}",
+            f"Output: {token_totals.output_tokens:,}",
+            f"Cache read: {token_totals.cache_read_tokens:,}",
+            f"Cache write: {token_totals.cache_write_tokens:,}",
+            f"Total: {token_totals.total_tokens:,}",
         ]
 
         chat = self.query_one("#chat-log", ChatLog)

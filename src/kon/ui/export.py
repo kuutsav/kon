@@ -93,46 +93,31 @@ def _add_sep(console: Console) -> None:
 
 def _print_metadata(console: Console, session: Session, model_id: str, provider: str) -> None:
     dim = config.ui.colors.dim
-    header = session._header
-
-    user_count = assistant_count = tool_call_count = 0
-    input_tokens = output_tokens = cache_read = cache_write = 0
-
-    for entry in session.entries:
-        if not isinstance(entry, MessageEntry):
-            continue
-        msg = entry.message
-        if isinstance(msg, UserMessage):
-            user_count += 1
-        elif isinstance(msg, AssistantMessage):
-            assistant_count += 1
-            for part in msg.content:
-                if isinstance(part, ToolCall):
-                    tool_call_count += 1
-            if msg.usage:
-                input_tokens += msg.usage.input_tokens
-                output_tokens += msg.usage.output_tokens
-                cache_read += msg.usage.cache_read_tokens
-                cache_write += msg.usage.cache_write_tokens
+    counts = session.message_counts()
+    token_totals = session.token_totals()
 
     model_str = model_id if provider == "unknown" else f"{model_id} ({provider})"
 
-    token_parts = [f"↑{input_tokens:,}", f"↓{output_tokens:,}"]
-    if cache_read:
-        token_parts.append(f"R{cache_read:,}")
-    if cache_write:
-        token_parts.append(f"W{cache_write:,}")
+    token_parts = [f"↑{token_totals.input_tokens:,}", f"↓{token_totals.output_tokens:,}"]
+    if token_totals.cache_read_tokens:
+        token_parts.append(f"R{token_totals.cache_read_tokens:,}")
+    if token_totals.cache_write_tokens:
+        token_parts.append(f"W{token_totals.cache_write_tokens:,}")
 
     table = Table(show_header=False, box=None, padding=(0, 1))
     table.add_column(style=dim)
     table.add_column()
     table.add_row("ID", session.id)
     table.add_row("Directory", session.cwd)
-    table.add_row("Created", header.timestamp if header else "unknown")
+    table.add_row("Created", session.created_at or "unknown")
     table.add_row("Model", model_str)
     table.add_row("Thinking", session.thinking_level)
     table.add_row(
-        "Messages", f"{user_count} user, {assistant_count} assistant, {tool_call_count} tool calls"
+        "Messages",
+        (
+            f"{counts.user_messages} user, {counts.assistant_messages} assistant, "
+            f"{counts.tool_calls} tool calls"
+        ),
     )
     table.add_row("Tokens", " ".join(token_parts))
     console.print(table)

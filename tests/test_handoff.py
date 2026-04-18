@@ -16,7 +16,6 @@ class _FakeInfoBar:
     def __init__(self) -> None:
         self.tokens_calls: list[tuple[int, int, int, int]] = []
         self.file_changes_calls: list[dict[str, tuple[int, int]]] = []
-        self.session_ids: list[str] = []
         self.thinking_levels: list[str] = []
 
     def set_tokens(self, input_t: int, output_t: int, context_t: int, cache_t: int) -> None:
@@ -24,9 +23,6 @@ class _FakeInfoBar:
 
     def set_file_changes(self, file_changes: dict[str, tuple[int, int]]) -> None:
         self.file_changes_calls.append(file_changes)
-
-    def set_session_id(self, session_id: str) -> None:
-        self.session_ids.append(session_id)
 
     def set_thinking_level(self, level: str) -> None:
         self.thinking_levels.append(level)

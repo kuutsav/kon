@@ -15,6 +15,7 @@ Structure:
 import json
 import re
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -23,7 +24,15 @@ from pydantic import BaseModel
 
 from kon import CONFIG_DIR_NAME
 
-from .core.types import AssistantMessage, Message, StopReason, TextContent, UserMessage
+from .core.types import (
+    AssistantMessage,
+    Message,
+    StopReason,
+    TextContent,
+    ToolCall,
+    ToolResultMessage,
+    UserMessage,
+)
 
 CURRENT_VERSION = 1
 _SKILL_TRIGGER_HEADER_RE = re.compile(r"^\[([a-z0-9-]+)\]\s*$")
@@ -107,6 +116,36 @@ class SessionInfo(BaseModel):
     first_message: str
 
 
+@dataclass(frozen=True)
+class SessionTokenTotals:
+    input_tokens: int = 0
+    output_tokens: int = 0
+    context_tokens: int = 0
+    cache_read_tokens: int = 0
+    cache_write_tokens: int = 0
+
+    @property
+    def total_tokens(self) -> int:
+        return (
+            self.input_tokens
+            + self.output_tokens
+            + self.cache_read_tokens
+            + self.cache_write_tokens
+        )
+
+
+@dataclass(frozen=True)
+class SessionMessageCounts:
+    user_messages: int = 0
+    assistant_messages: int = 0
+    tool_calls: int = 0
+    tool_results: int = 0
+
+    @property
+    def total_messages(self) -> int:
+        return self.user_messages + self.assistant_messages
+
+
 class Session:
     """
     Manages conversation persistence as append-only JSONL.
@@ -185,6 +224,10 @@ class Session:
     @property
     def system_prompt(self) -> str | None:
         return self._header.system_prompt if self._header else None
+
+    @property
+    def created_at(self) -> str | None:
+        return self._header.timestamp if self._header else None
 
     @property
     def leaf_id(self) -> str | None:
@@ -387,6 +430,72 @@ class Session:
             return text or None
 
         return None
+
+    def token_totals(self) -> SessionTokenTotals:
+        input_tokens = 0
+        output_tokens = 0
+        cache_read_tokens = 0
+        cache_write_tokens = 0
+        context_tokens = 0
+
+        for entry in self._entries:
+            if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
+                usage = entry.message.usage
+                if usage is None:
+                    continue
+                input_tokens += usage.input_tokens
+                output_tokens += usage.output_tokens
+                cache_read_tokens += usage.cache_read_tokens
+                cache_write_tokens += usage.cache_write_tokens
+                context_tokens = (
+                    usage.input_tokens
+                    + usage.output_tokens
+                    + usage.cache_read_tokens
+                    + usage.cache_write_tokens
+                )
+
+        return SessionTokenTotals(
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            context_tokens=context_tokens,
+            cache_read_tokens=cache_read_tokens,
+            cache_write_tokens=cache_write_tokens,
+        )
+
+    def file_changes_summary(self) -> dict[str, tuple[int, int]]:
+        file_changes: dict[str, tuple[int, int]] = {}
+        for entry in self._entries:
+            if isinstance(entry, MessageEntry) and isinstance(entry.message, ToolResultMessage):
+                fc = entry.message.file_changes
+                if fc:
+                    prev_added, prev_removed = file_changes.get(fc.path, (0, 0))
+                    file_changes[fc.path] = (prev_added + fc.added, prev_removed + fc.removed)
+        return file_changes
+
+    def message_counts(self) -> SessionMessageCounts:
+        user_messages = 0
+        assistant_messages = 0
+        tool_calls = 0
+        tool_results = 0
+
+        for entry in self._entries:
+            if not isinstance(entry, MessageEntry):
+                continue
+            message = entry.message
+            if isinstance(message, UserMessage):
+                user_messages += 1
+            elif isinstance(message, AssistantMessage):
+                assistant_messages += 1
+                tool_calls += sum(1 for part in message.content if isinstance(part, ToolCall))
+            elif isinstance(message, ToolResultMessage):
+                tool_results += 1
+
+        return SessionMessageCounts(
+            user_messages=user_messages,
+            assistant_messages=assistant_messages,
+            tool_calls=tool_calls,
+            tool_results=tool_results,
+        )
 
     @property
     def name(self) -> str | None:

@@ -47,6 +47,11 @@ class SessionUIMixin:
     def _create_provider(self, api_type: ApiType, config: ProviderConfig) -> BaseProvider: ...
     def _apply_thinking_level_style(self, level: str) -> None: ...
 
+    def _resolve_system_prompt(self, session: Session | None = None) -> str:
+        return (session.system_prompt if session else None) or build_system_prompt(
+            self._cwd, tools=self._tools
+        )
+
     def _extract_text_content(self, content: str | list[TextContent | ImageContent]) -> str:
         if isinstance(content, str):
             return content
@@ -158,49 +163,6 @@ class SessionUIMixin:
                 elif entry.display:
                     chat.add_info_message(entry.content)
 
-    @staticmethod
-    def _calculate_session_tokens(session: Session) -> tuple[int, int, int, int, int]:
-        """
-        Calculate cumulative token usage from session entries.
-
-        Returns
-        -------
-        (input_tokens, output_tokens, context_tokens, cache_read_tokens, cache_write_tokens)
-        """
-        input_tokens = 0
-        output_tokens = 0
-        cache_read_tokens = 0
-        cache_write_tokens = 0
-        context_tokens = 0
-
-        for entry in session.entries:
-            if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
-                usage = entry.message.usage
-                if usage:
-                    input_tokens += usage.input_tokens
-                    output_tokens += usage.output_tokens
-                    cache_read_tokens += usage.cache_read_tokens
-                    cache_write_tokens += usage.cache_write_tokens
-                    context_tokens = (
-                        usage.input_tokens
-                        + usage.output_tokens
-                        + usage.cache_read_tokens
-                        + usage.cache_write_tokens
-                    )
-
-        return input_tokens, output_tokens, context_tokens, cache_read_tokens, cache_write_tokens
-
-    @staticmethod
-    def _calculate_session_file_changes(session: Session) -> dict[str, tuple[int, int]]:
-        file_changes: dict[str, tuple[int, int]] = {}
-        for entry in session.entries:
-            if isinstance(entry, MessageEntry) and isinstance(entry.message, ToolResultMessage):
-                fc = entry.message.file_changes
-                if fc:
-                    prev_added, prev_removed = file_changes.get(fc.path, (0, 0))
-                    file_changes[fc.path] = (prev_added + fc.added, prev_removed + fc.removed)
-        return file_changes
-
     async def _load_session_by_id(self, session_id: str) -> None:
         chat = self.query_one("#chat-log", ChatLog)
         input_box = self.query_one("#input-box", InputBox)
@@ -238,12 +200,15 @@ class SessionUIMixin:
         self._current_block_type = None
 
         status.reset()
-        input_t, output_t, context_t, cache_read_t, cache_write_t = self._calculate_session_tokens(
-            session
+        token_totals = session.token_totals()
+        info_bar.set_tokens(
+            token_totals.input_tokens,
+            token_totals.output_tokens,
+            token_totals.context_tokens,
+            token_totals.cache_read_tokens,
+            token_totals.cache_write_tokens,
         )
-        info_bar.set_tokens(input_t, output_t, context_t, cache_read_t, cache_write_t)
-        info_bar.set_file_changes(self._calculate_session_file_changes(session))
-        info_bar.set_session_id(session.id[:8])
+        info_bar.set_file_changes(session.file_changes_summary())
 
         model_info = session.model
         if model_info:
@@ -296,15 +261,12 @@ class SessionUIMixin:
         self._apply_thinking_level_style(thinking_level)
 
         if self._provider is not None:
-            system_prompt = session.system_prompt or build_system_prompt(
-                self._cwd, tools=self._tools
-            )
             self._agent = Agent(
                 provider=self._provider,
                 tools=self._tools,
                 session=session,
                 cwd=self._cwd,
-                system_prompt=system_prompt,
+                system_prompt=self._resolve_system_prompt(session),
             )
         elif self._agent is not None:
             self._agent.session = session

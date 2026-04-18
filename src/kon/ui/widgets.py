@@ -153,7 +153,6 @@ class InfoBar(Vertical):
         cwd: str,
         model: str,
         context_window: int | None = None,
-        session_id: str | None = None,
         thinking_level: str | None = None,
         hide_thinking: bool = False,
         **kwargs,
@@ -164,7 +163,6 @@ class InfoBar(Vertical):
         self._model = model
         self._model_provider: str | None = None
         self._context_window = context_window or config.agent.default_context_window
-        self._session_id = session_id
         self._thinking_level = thinking_level or config.llm.default_thinking_level
         self._hide_thinking = hide_thinking
         self._input_tokens = 0
@@ -298,9 +296,6 @@ class InfoBar(Vertical):
         if widget is self.query_one("#info-row2-left", Label):
             event.stop()
             self.app.push_screen(FileChangesModal(self._file_changes))
-
-    def set_session_id(self, session_id: str) -> None:
-        pass
 
 
 class QueueDisplay(Vertical):

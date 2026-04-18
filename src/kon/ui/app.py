@@ -324,7 +324,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                     provider=self._model_provider,
                     model_id=self._model,
                     thinking_level=self._thinking_level,
-                    system_prompt=build_system_prompt(self._cwd, tools=self._tools),
+                    system_prompt=self._resolve_system_prompt(None),
                 )
             except Exception as e:
                 self._add_launch_warning(str(e), severity="error")
@@ -388,13 +388,12 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 else (self._provider.name if self._provider else self._model_provider)
             )
             self._model_provider = model_provider
-            system_prompt = build_system_prompt(self._cwd, tools=self._tools)
             self._session = Session.create(
                 self._cwd,
                 provider=model_provider,
                 model_id=self._model,
                 thinking_level=self._thinking_level,
-                system_prompt=system_prompt,
+                system_prompt=self._resolve_system_prompt(None),
             )
             if model_provider:
                 self._session.append_model_change(model_provider, self._model, base_url)
@@ -402,15 +401,12 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         # Create Agent once — it owns context + system prompt (stable across queries
         # for prompt-prefix caching on llama-server and similar engines).
         if self._provider is not None and self._session is not None:
-            system_prompt = self._session.system_prompt or build_system_prompt(
-                self._cwd, tools=self._tools
-            )
             self._agent = Agent(
                 provider=self._provider,
                 tools=self._tools,
                 session=self._session,
                 cwd=self._cwd,
-                system_prompt=system_prompt,
+                system_prompt=self._resolve_system_prompt(self._session),
             )
 
         self._sync_slash_commands()
@@ -435,8 +431,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         self._flush_launch_warnings(chat)
 
         info_bar = self.query_one("#info-bar", InfoBar)
-        if self._session:
-            info_bar.set_session_id(self._session.id[:8])
         model_provider = (
             model_info.provider
             if model_info
@@ -453,11 +447,15 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             and self._session.entries
         ):
             self._render_session_entries(self._session)
-            input_t, output_t, context_t, cache_read_t, cache_write_t = (
-                self._calculate_session_tokens(self._session)
+            token_totals = self._session.token_totals()
+            info_bar.set_tokens(
+                token_totals.input_tokens,
+                token_totals.output_tokens,
+                token_totals.context_tokens,
+                token_totals.cache_read_tokens,
+                token_totals.cache_write_tokens,
             )
-            info_bar.set_tokens(input_t, output_t, context_t, cache_read_t, cache_write_t)
-            info_bar.set_file_changes(self._calculate_session_file_changes(self._session))
+            info_bar.set_file_changes(self._session.file_changes_summary())
             chat.add_info_message("Resumed session")
 
         if self._provider and self._session:
@@ -853,15 +851,12 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             return
 
         if self._agent is None:
-            system_prompt = self._session.system_prompt or build_system_prompt(
-                self._cwd, tools=self._tools
-            )
             self._agent = Agent(
                 provider=self._provider,
                 tools=self._tools,
                 session=self._session,
                 cwd=self._cwd,
-                system_prompt=system_prompt,
+                system_prompt=self._resolve_system_prompt(self._session),
             )
 
         current_prompt = prompt
@@ -1180,7 +1175,7 @@ def main():
 
     if app._session:
         session_id = app._session.id
-        file_changes = SessionUIMixin._calculate_session_file_changes(app._session) or None
+        file_changes = app._session.file_changes_summary() or None
     if app._session_start_time is not None:
         duration = time.time() - app._session_start_time
 

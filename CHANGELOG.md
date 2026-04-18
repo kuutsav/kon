@@ -6,6 +6,32 @@ All notable changes to this project will be documented in this file.
 
 - No changes yet.
 
+## 0.3.5 - 2026-04-18
+
+### Added
+
+- Standalone session HTML export with self-contained styling.
+- Configurable request timeout for API calls - @jspruit.
+- GitHub CI tests for Python 3.12–3.13 - @sukhbinder.
+- Width-aware popup lists and queue display.
+
+### Changed
+
+- Highlight color applied to the second column in floating lists.
+- Batch scroll during streaming, cache query_one lookups, pause spinner timer when idle.
+- Diff line length capped at 200 characters.
+
+### Fixed
+
+- Persist thinking level in session header and change all defaults to high.
+- Normalize OpenAI provider imports.
+- Widen resume popup labels.
+- Remove unused UI app import.
+
+### Performance
+
+- Added `gc.freeze()` and `PAUSE_GC_ON_SCROLL` to reduce GC stutters.
+
 ## 0.3.4 - 2026-04-10
 
 ### Fixed

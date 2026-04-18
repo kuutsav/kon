@@ -60,7 +60,7 @@ from ..llm import (
     resolve_provider_api_type,
 )
 from ..llm.base import AuthMode
-from ..loop import Agent, build_system_prompt
+from ..loop import Agent
 from ..permissions import ApprovalResponse
 from ..session import Session
 from ..tools import DEFAULT_TOOLS, EXTRA_TOOLS, get_tool, get_tools

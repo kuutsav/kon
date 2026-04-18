@@ -309,13 +309,13 @@ class ToolBlock(Static):
         output.update(Text(""))
 
     def _format_approval_controls(self) -> Text:
-        accent_style = f"{config.ui.colors.accent} bold"
-        dim_style = config.ui.colors.dim
+        colors = config.ui.colors
         text = Text()
-        text.append("[y]", style=accent_style)
-        text.append(" approve  ", style=dim_style)
-        text.append("[n]", style=accent_style)
-        text.append(" deny", style=dim_style)
+        text.append("[y] approve ", style=Style(bgcolor=colors.accent, color=colors.bg, bold=True))
+        text.append("  ")
+        text.append(
+            "[n] deny ", style=Style(bgcolor=colors.panel_alt, color=colors.dim, bold=True)
+        )
         return text
 
     def update_call_msg(self, call_msg: str) -> None:

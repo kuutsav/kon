@@ -114,11 +114,15 @@ Screen {{
 }}
 
 .tool-block.-approval {{
-    background: transparent;
+    background: {colors.panel};
     color: {colors.dim};
     border-left: outer {colors.accent};
     margin: 1 0 1 1;
-    padding: 0 1 0 1;
+    padding: 1 1;
+}}
+
+.tool-block.-approval #tool-output {{
+    padding: 1 0 0 0;
 }}
 
 #tool-header {{

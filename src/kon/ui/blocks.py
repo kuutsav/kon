@@ -220,6 +220,13 @@ class ToolBlock(Static):
             icon_style = colors.failed
             name_style = colors.failed
 
+        if self._awaiting_approval:
+            result.append(
+                " △ Permission required ",
+                style=Style(bgcolor=colors.notice, color=colors.bg, bold=True),
+            )
+            result.append("\n\n")
+
         result.append(f"{self._icon} ", style=icon_style)
         result.append(formatted_name, style=name_style)
 

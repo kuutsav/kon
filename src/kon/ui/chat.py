@@ -168,17 +168,17 @@ class ChatLog(VerticalScroll):
                 info_text.append("\n", style=muted)
 
         append_hint("escape", "to interrupt")
-        append_hint("ctrl+c", "to clear input")
-        append_hint("ctrl+c twice", "to exit")
-        append_hint("ctrl+t", "to show or hide thinking")
-        append_hint("shift+tab", "to cycle thinking level")
-        append_hint("/", "for commands")
-        append_hint("@", "to search files inline")
-        append_hint("tab", "to complete paths")
-        append_hint("up and down", "for prompt history")
-        append_hint("enter", "for queue")
-        append_hint("alt+enter", "for steer queue")
-        append_hint("shift+enter", "for newline", trailing_newline=False)
+        append_hint("@", "to attach files/dirs")
+        append_hint("/", "for commands & skills")
+        append_hint("shift+enter", "for newline")
+        append_hint("↑/↓", "to scroll through history")
+        append_hint("tab", "to autocomplete paths")
+        append_hint("ctrl+c", "to clear the input")
+        append_hint("ctrl+c x2", "to quit the tui")
+        append_hint("enter", "to send (or queue if busy)")
+        append_hint("alt+enter", "to steer asap if busy")
+        append_hint("ctrl+t", "toggle agent thinking")
+        append_hint("shift+tab", "cycle thinking depth", trailing_newline=False)
 
         info_label = Label(info_text)
         info_label.add_class("session-info")
@@ -206,6 +206,61 @@ class ChatLog(VerticalScroll):
 
         # Remove trailing newline
         text.rstrip()
+
+        label = Label(text)
+        label.add_class("info-message")
+        label.add_class("loaded-resources")
+        self.mount(label)
+
+    def add_session_details(
+        self,
+        *,
+        session_dir: str | None,
+        session_file: str,
+        user_messages: int,
+        assistant_messages: int,
+        tool_calls: int,
+        tool_results: int,
+        total_messages: int,
+        input_tokens: int,
+        output_tokens: int,
+        cache_read_tokens: int,
+        cache_write_tokens: int,
+        total_tokens: int,
+    ) -> None:
+        notice_color = config.ui.colors.notice
+        dim_color = config.ui.colors.dim
+        muted_color = config.ui.colors.muted
+        text = Text()
+
+        def append_section(title: str) -> None:
+            text.append("\n")
+            text.append(f"[{title}]\n", style=notice_color)
+
+        def append_row(key: str, value: str | int, trailing_newline: bool = True) -> None:
+            text.append(f"  {key}:", style=dim_color)
+            text.append(f" {value}", style=muted_color)
+            if trailing_newline:
+                text.append("\n")
+
+        append_section("File")
+        if session_dir is not None:
+            append_row("Dir", session_dir)
+        append_row("File", session_file)
+
+        append_section("Messages")
+        append_row("User", user_messages)
+        append_row("Assistant", assistant_messages)
+        append_row("Tool Calls", tool_calls)
+        append_row("Tool Results", tool_results)
+        append_row("Total", total_messages)
+
+        append_section("Tokens")
+        append_row("Input", f"{input_tokens:,}")
+        append_row("Output", f"{output_tokens:,}")
+        append_row("Cache read", f"{cache_read_tokens:,}")
+        append_row("Cache write", f"{cache_write_tokens:,}")
+        append_row("Total", f"{total_tokens:,}", trailing_newline=False)
 
         label = Label(text)
         label.add_class("info-message")

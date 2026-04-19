@@ -419,38 +419,27 @@ Extra tools:
             chat.add_info_message("No active session")
             return
 
-        session_file = self._session.session_file
-        file_path = str(session_file) if session_file else "(in-memory session)"
+        session_path = self._session.session_file
+        session_dir = str(session_path.parent) if session_path else None
+        session_file = session_path.name if session_path else "(in-memory session)"
 
         counts = self._session.message_counts()
         token_totals = self._session.token_totals()
 
-        total_messages = counts.total_messages
-
-        lines = [
-            "Session Info",
-            "",
-            "File:",
-            f"{file_path}",
-            f"ID: {self._session.id}",
-            "",
-            "Messages",
-            f"User: {counts.user_messages}",
-            f"Assistant: {counts.assistant_messages}",
-            f"Tool Calls: {counts.tool_calls}",
-            f"Tool Results: {counts.tool_results}",
-            f"Total: {total_messages}",
-            "",
-            "Tokens",
-            f"Input: {token_totals.input_tokens:,}",
-            f"Output: {token_totals.output_tokens:,}",
-            f"Cache read: {token_totals.cache_read_tokens:,}",
-            f"Cache write: {token_totals.cache_write_tokens:,}",
-            f"Total: {token_totals.total_tokens:,}",
-        ]
-
-        chat = self.query_one("#chat-log", ChatLog)
-        chat.add_info_message("\n".join(lines))
+        chat.add_session_details(
+            session_dir=session_dir,
+            session_file=session_file,
+            user_messages=counts.user_messages,
+            assistant_messages=counts.assistant_messages,
+            tool_calls=counts.tool_calls,
+            tool_results=counts.tool_results,
+            total_messages=counts.total_messages,
+            input_tokens=token_totals.input_tokens,
+            output_tokens=token_totals.output_tokens,
+            cache_read_tokens=token_totals.cache_read_tokens,
+            cache_write_tokens=token_totals.cache_write_tokens,
+            total_tokens=token_totals.total_tokens,
+        )
 
     def _build_resume_items(self) -> list[ListItem]:
         sessions = Session.list(self._cwd)

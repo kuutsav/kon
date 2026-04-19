@@ -49,8 +49,7 @@ class GrepTool(BaseTool):
             parts.append(f"in {shorten_path(params.path)}")
         if params.include:
             parts.append(f"({params.include})")
-        message = " ".join(parts)
-        return truncate_text(message)
+        return " ".join(parts)
 
     async def execute(
         self, params: GrepParams, cancel_event: asyncio.Event | None = None

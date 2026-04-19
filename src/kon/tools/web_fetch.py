@@ -84,7 +84,7 @@ class WebFetchTool(BaseTool):
     )
 
     def format_call(self, params: WebFetchParams) -> str:
-        return truncate_text(params.url)
+        return params.url
 
     async def execute(
         self, params: WebFetchParams, cancel_event: asyncio.Event | None = None

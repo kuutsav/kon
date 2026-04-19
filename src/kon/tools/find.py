@@ -44,8 +44,7 @@ class FindTool(BaseTool):
         parts = [f'"{pattern}"']
         if params.path:
             parts.append(f"in {shorten_path(params.path)}")
-        message = " ".join(parts)
-        return truncate_text(message)
+        return " ".join(parts)
 
     async def execute(
         self, params: FindParams, cancel_event: asyncio.Event | None = None

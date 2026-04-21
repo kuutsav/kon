@@ -457,12 +457,6 @@ If `fd` or `rg` are missing, Kon can download them automatically.
 
 ---
 
-## Documentation
-
-- [Local models](docs/local-models.md) - Running Kon with local OpenAI-compatible models, plus tested setups and example commands.
-
----
-
 ## Acknowledgements
 
 - Kon takes significant inspiration from [pi coding-agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent), especially around philosophy and UI direction.

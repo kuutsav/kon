@@ -312,7 +312,6 @@ async def run_single_turn(
     current_state: StreamState | None = None
     stop_reason: StopReason = StopReason.STOP
     interrupted = False
-    has_meaningful_output = False
 
     def _finalize_current_state(include_empty: bool = True) -> list[StreamEvent]:
         nonlocal current_state, current_tool_call, think_buffer, think_signature, text_buffer
@@ -437,7 +436,6 @@ async def run_single_turn(
 
                 current_state = StreamState.THINK
                 think_buffer.append(t)
-                has_meaningful_output = True
                 if sig:
                     think_signature = sig
 
@@ -459,14 +457,11 @@ async def run_single_turn(
 
                 current_state = StreamState.TEXT
                 text_buffer.append(t)
-                if t.strip():
-                    has_meaningful_output = True
 
                 yield TextDeltaEvent(delta=t)
 
             case ToolCallStart(id=id, name=name, arguments=initial_arguments):
                 tool_call_count += 1
-                has_meaningful_output = True
                 if current_state and current_state != StreamState.TOOL_CALL:
                     for finalize_event in _finalize_current_state():
                         yield finalize_event

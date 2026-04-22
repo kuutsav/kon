@@ -64,11 +64,6 @@ class FileChangesModal(ModalScreen[None]):
         padding-bottom: 1;
     }
 
-    #file-changes-summary {
-        width: 100%;
-        padding-bottom: 1;
-    }
-
     #file-changes-list {
         width: 100%;
     }
@@ -81,30 +76,20 @@ class FileChangesModal(ModalScreen[None]):
     def compose(self) -> ComposeResult:
         with Vertical(id="file-changes-container"):
             yield Label(self._format_title(), id="file-changes-title")
-            yield Label(self._format_summary(), id="file-changes-summary")
             yield Label(self._format_file_list(), id="file-changes-list")
 
     def _format_title(self) -> Text:
-        return Text("File Changes", style="bold")
-
-    def _format_summary(self) -> Text:
         colors = config.ui.colors
         n_files = len(self._file_changes)
         total_added = sum(a for a, _ in self._file_changes.values())
         total_removed = sum(r for _, r in self._file_changes.values())
 
-        # Use same column widths as file list so they align
-        max_added_w = max((len(str(a)) for a, _ in self._file_changes.values()), default=1)
-        max_removed_w = max((len(str(r)) for _, r in self._file_changes.values()), default=1)
-
-        added_str = f"+{total_added}".rjust(max_added_w + 1)
-        removed_str = f"-{total_removed}".rjust(max_removed_w + 1)
-
         result = Text()
-        result.append(f"  {added_str}", style=f"bold {colors.diff_added}")
-        result.append(f" {removed_str}", style=f"bold {colors.diff_removed}")
+        result.append(f"{n_files} file{'s' if n_files != 1 else ''} changed", style="bold")
         result.append("  ")
-        result.append(f"{n_files} file{'s' if n_files != 1 else ''}", style="bold")
+        result.append(f"+{total_added}", style=f"bold {colors.diff_added}")
+        result.append(" ")
+        result.append(f"-{total_removed}", style=f"bold {colors.diff_removed}")
         return result
 
     def _format_file_list(self) -> Text:

@@ -181,6 +181,13 @@ SUPERSCRIPT = str.maketrans(
     "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿᵃᵇᶜᵈᵉᶠᵍʰᵢʲᵏˡᵐᵒʳˢᵗᵘᵛʷʸᵚᵜᵝᵞᵟᴬᴮᴰᴱᴳᴴᴵᴶᴷᴸᴹᴺᴼᴾᴿᵀᵁ",
 )
 SUBSCRIPT = str.maketrans("0123456789+-=()aehijklmnoprstuvx", "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₕᵢⱼₖₗₘₙₒₚᵣₛₜᵤᵥₓ")
+_SYMBOL_ITEMS = sorted(list(GREEK.items()) + list(OPERATORS.items()), key=lambda x: -len(x[0]))
+_SQRT_INDEX_RE = re.compile(r"\\sqrt\[([^\]]+)\]\{([^{}]+)\}")
+_DISPLAY_DOLLAR_RE = re.compile(r"\$\$(.+?)\$\$", re.DOTALL)
+_DISPLAY_BRACKET_RE = re.compile(r"\\\[(.+?)\\\]", re.DOTALL)
+_INLINE_DOLLAR_RE = re.compile(r"(?<!\$)\$(.+?)\$(?!\$)")
+_INLINE_PAREN_RE = re.compile(r"\\\((.+?)\\\)")
+_FENCE_RE = re.compile(r"(^```.*?^```)", re.DOTALL | re.MULTILINE)
 
 
 def _to_super(s: str) -> str:
@@ -291,18 +298,13 @@ def _convert_math(tex: str) -> str:
                 else f"{a[0]}/{a[1]}"
             ),
         )
-    s = re.sub(
-        r"\\sqrt\[([^\]]+)\]\{([^{}]+)\}",
-        lambda m: _to_super(m.group(1)) + "√(" + m.group(2) + ")",
-        s,
-    )
+    s = _SQRT_INDEX_RE.sub(lambda m: _to_super(m.group(1)) + "√(" + m.group(2) + ")", s)
     s = _replace_command_with_groups(s, "sqrt", 1, lambda a: "√(" + a[0] + ")")
     s = _replace_command_with_groups(s, "vec", 1, lambda a: a[0] + "⃗")
     s = _replace_command_with_groups(s, "hat", 1, lambda a: a[0] + "̂")
     s = _replace_command_with_groups(s, "bar", 1, lambda a: a[0] + "̄")
     s = _replace_command_with_groups(s, "dot", 1, lambda a: a[0] + "̇")
-    items = sorted(list(GREEK.items()) + list(OPERATORS.items()), key=lambda x: -len(x[0]))
-    for k, v in items:
+    for k, v in _SYMBOL_ITEMS:
         if k and k[-1].isalpha():
             s = re.sub(re.escape(k) + r"(?![A-Za-z])", v, s)
         else:
@@ -319,9 +321,6 @@ def _convert_math(tex: str) -> str:
     return s
 
 
-_FENCE_RE = re.compile(r"(^```.*?^```)", re.DOTALL | re.MULTILINE)
-
-
 def preprocess_latex(text: str) -> str:
     r"""Convert LaTeX math delimiters in *text* to Unicode, leaving code fences untouched.
 
@@ -331,25 +330,20 @@ def preprocess_latex(text: str) -> str:
     if "$" not in text and "\\(" not in text and "\\[" not in text:
         return text
 
+    def _process_part(part: str) -> str:
+        part = _DISPLAY_DOLLAR_RE.sub(lambda m: "\n\n" + _convert_math(m.group(1)) + "\n\n", part)
+        part = _DISPLAY_BRACKET_RE.sub(lambda m: "\n\n" + _convert_math(m.group(1)) + "\n\n", part)
+        part = _INLINE_DOLLAR_RE.sub(lambda m: _convert_math(m.group(1)), part)
+        return _INLINE_PAREN_RE.sub(lambda m: _convert_math(m.group(1)), part)
+
+    if "```" not in text:
+        return _process_part(text)
+
     parts = _FENCE_RE.split(text)
     out = []
     for part in parts:
         if part.startswith("```"):
             out.append(part)
             continue
-        part = re.sub(
-            r"\$\$(.+?)\$\$",
-            lambda m: "\n\n" + _convert_math(m.group(1)) + "\n\n",
-            part,
-            flags=re.DOTALL,
-        )
-        part = re.sub(
-            r"\\\[(.+?)\\\]",
-            lambda m: "\n\n" + _convert_math(m.group(1)) + "\n\n",
-            part,
-            flags=re.DOTALL,
-        )
-        part = re.sub(r"(?<!\$)\$(.+?)\$(?!\$)", lambda m: _convert_math(m.group(1)), part)
-        part = re.sub(r"\\\((.+?)\\\)", lambda m: _convert_math(m.group(1)), part)
-        out.append(part)
+        out.append(_process_part(part))
     return "".join(out)

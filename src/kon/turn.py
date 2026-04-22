@@ -444,7 +444,10 @@ async def run_single_turn(
                 yield ThinkingDeltaEvent(delta=t)
 
             case TextPart(text=t):
-                if not has_meaningful_output and not t.strip():
+                # Skip whitespace-only text that would start a new (empty)
+                # content block — prevents phantom gaps between thinking
+                # and tool-call blocks.
+                if not t.strip() and current_state != StreamState.TEXT:
                     continue
 
                 if current_state and current_state != StreamState.TEXT:

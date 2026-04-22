@@ -279,11 +279,26 @@ class OpenAICodexResponsesProvider(BaseProvider):
                             yield StreamDone(stop_reason=stop_reason)
                             return
 
-                    elif event_type in {"response.failed", "error"}:
+                    elif event_type == "error":
+                        code = event.get("code")
                         message = event.get("message")
-                        if not isinstance(message, str):
-                            message = "Codex response failed"
-                        yield StreamError(error=message)
+                        if isinstance(message, str) and message:
+                            yield StreamError(error=f"Codex error: {message}")
+                        elif isinstance(code, str) and code:
+                            yield StreamError(error=f"Codex error: {code}")
+                        else:
+                            yield StreamError(error=f"Codex error: {json.dumps(event)}")
+                        return
+
+                    elif event_type == "response.failed":
+                        response_obj = event.get("response")
+                        msg = None
+                        if isinstance(response_obj, dict):
+                            err = response_obj.get("error")
+                            if isinstance(err, dict):
+                                msg = err.get("message")
+                        err_msg = msg if isinstance(msg, str) and msg else "Codex response failed"
+                        yield StreamError(error=err_msg)
                         return
             finally:
                 await session.close()
@@ -321,7 +336,8 @@ class OpenAICodexResponsesProvider(BaseProvider):
         return StopReason.STOP
 
     def should_retry_for_error(self, error: Exception) -> bool:
-        return False
+        msg = str(error).lower()
+        return any(kw in msg for kw in ("429", "rate_limit", "server_error", "502", "503", "504"))
 
 
 def is_openai_logged_in() -> bool:

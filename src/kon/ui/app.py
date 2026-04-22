@@ -848,6 +848,15 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         normal_items = [(display, False) for display, _ in self._pending_queue]
         queue_display.update_items(steer_items + normal_items)
 
+    def _should_notify_for_event(self, event: object) -> bool:
+        if not config.notifications.enabled:
+            return False
+        if not isinstance(event, _NOTIFY_EVENTS):
+            return False
+        return not (
+            isinstance(event, AgentEndEvent) and event.stop_reason == StopReason.INTERRUPTED
+        )
+
     async def _run_agent(self, prompt: str) -> None:
         chat = self.query_one("#chat-log", ChatLog)
         status = self.query_one("#status-line", StatusLine)
@@ -892,13 +901,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 async for event in self._agent.run(
                     current_prompt, cancel_event=self._cancel_event, steer_event=self._steer_event
                 ):
-                    should_notify = isinstance(event, _NOTIFY_EVENTS)
-                    if (
-                        isinstance(event, AgentEndEvent)
-                        and event.stop_reason == StopReason.INTERRUPTED
-                    ):
-                        should_notify = False
-                    if should_notify:
+                    if self._should_notify_for_event(event):
                         notify("kon", "Task complete")
 
                     match event:

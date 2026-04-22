@@ -73,3 +73,8 @@ collapse_thinking = true
 # "prompt" asks before edits/writes and other mutating actions.
 # "auto" allows tool calls without approval prompts.
 mode = "prompt" # "prompt" or "auto"
+
+[notifications]
+# Ring the terminal bell when kon finishes a task or waits for tool approval.
+# Disabled by default.
+enabled = false

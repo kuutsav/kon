@@ -98,6 +98,10 @@ class ToolsConfig(BaseModel):
     extra: list[str] = []
 
 
+class NotificationsConfig(BaseModel):
+    enabled: bool = False
+
+
 class ConfigSchema(BaseModel):
     meta: MetaConfig
     llm: LLMConfig
@@ -106,6 +110,7 @@ class ConfigSchema(BaseModel):
     agent: AgentConfig
     tools: ToolsConfig = ToolsConfig()
     permissions: PermissionsConfig
+    notifications: NotificationsConfig = NotificationsConfig()
 
 
 # =================================================================================================
@@ -193,6 +198,10 @@ class Config:
     @property
     def tools(self) -> ToolsConfig:
         return self._parsed.tools
+
+    @property
+    def notifications(self) -> NotificationsConfig:
+        return self._parsed.notifications
 
     @property
     def binaries(self) -> _BinariesConfig:

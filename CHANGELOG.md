@@ -6,6 +6,28 @@ All notable changes to this project will be documented in this file.
 
 - No changes yet.
 
+## 0.3.6 - 2026-04-23
+
+### Added
+
+- Configurable terminal bell notifications on response completion.
+- Render LaTeX math as Unicode in markdown output - @toojays.
+- Style approval popup with button-like controls and panel background.
+- Permission popup title card and improved UI formatting.
+
+### Changed
+
+- Improved UI for approval popup.
+- Reduce LaTeX preprocessing overhead.
+- Improved Codex SSE error extraction and retry on transient errors.
+
+### Fixed
+
+- Rewrite web_fetch to bypass bot-detection, preserve indentation, and harden against SSRF - @Meltedd (#28, #29).
+- Remove unused turn streaming state.
+- Remove unused tool imports.
+- Remove empty blocks.
+
 ## 0.3.5 - 2026-04-18
 
 ### Added

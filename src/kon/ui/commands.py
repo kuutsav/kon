@@ -93,6 +93,9 @@ class CommandsMixin:
         if cmd == "themes":
             self._handle_themes_command(args)
             return True
+        if cmd == "permissions":
+            self._handle_permissions_command(args)
+            return True
         if cmd == "handoff":
             self._handle_handoff_command(args)
             return True
@@ -129,6 +132,7 @@ class CommandsMixin:
   /compact   - Compact current conversation now
   /model     - Change model (/model gpt-4o)
   /themes    - Change UI theme (/themes gruvbox-dark)
+  /permissions - Change permission mode (/permissions auto)
   /new       - Start new conversation
   /handoff   - Start focused handoff in new session
   /resume    - Resume a session
@@ -219,6 +223,50 @@ Extra tools:
         input_box.set_completing(True)
         input_box.focus()
         self._selection_mode = SelectionMode.THEME
+
+    def _handle_permissions_command(self, args: str) -> None:
+        chat = self.query_one("#chat-log", ChatLog)
+
+        requested = args.strip()
+        if requested:
+            if requested in ("prompt", "auto"):
+                self._select_permission_mode(requested)
+            else:
+                chat.add_info_message(f"Invalid permission mode: {requested}. Use 'prompt' or 'auto'", error=True)
+            return
+
+        current_mode = config.permissions.mode
+        items = [
+            ListItem(
+                value="prompt",
+                label="Prompt",
+                description="prompt ✓" if current_mode == "prompt" else "prompt",
+            ),
+            ListItem(
+                value="auto",
+                label="Auto",
+                description="auto ✓" if current_mode == "auto" else "auto",
+            ),
+        ]
+
+        completion_list = self.query_one("#completion-list", FloatingList)
+        completion_list.show(items, searchable=True)
+
+        input_box = self.query_one("#input-box", InputBox)
+        input_box.clear()
+        input_box.set_autocomplete_enabled(False)
+        input_box.set_completing(True)
+        input_box.focus()
+        self._selection_mode = SelectionMode.PERMISSIONS
+
+    def _select_permission_mode(self, mode: str) -> None:
+        from kon.config import get_config
+        
+        current_config = get_config()
+        current_config._parsed.permissions.mode = mode
+        
+        chat = self.query_one("#chat-log", ChatLog)
+        chat.add_info_message(f"Permission mode changed to {mode}")
 
     def _select_theme(self, theme_id: str) -> None:
         set_theme(theme_id)

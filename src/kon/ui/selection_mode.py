@@ -7,3 +7,4 @@ class SelectionMode(StrEnum):
     THEME = "theme"
     LOGIN = "login"
     LOGOUT = "logout"
+    PERMISSIONS = "permissions"

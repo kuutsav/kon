@@ -595,6 +595,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                     self._select_model(item.value)
                 case SelectionMode.THEME:
                     self._select_theme(item.value)
+                case SelectionMode.PERMISSIONS:
+                    self._select_permission_mode(item.value)
                 case SelectionMode.LOGIN:
                     self._select_login_provider(item.value)
                 case SelectionMode.LOGOUT:

@@ -27,6 +27,7 @@ Kon is a minimal coding agent focused on a tiny core prompt, a small built-in to
 - [Interactive TUI](#interactive-tui)
   - [Editor and navigation](#editor-and-navigation)
   - [Slash commands](#slash-commands)
+  - [Shell commands](#shell-commands)
   - [Themes](#themes)
 - [Sessions](#sessions)
   - [Resume and continue](#resume-and-continue)
@@ -101,6 +102,18 @@ kon -r 3f2a8c1b-...
 
 # enable the optional web tools
 kon --extra-tools web_search,web_fetch
+```
+
+**Once inside Kon, you can:**
+
+```bash
+# Run shell commands directly
+!ls -la
+!git status
+
+# Run commands and get LLM analysis
+!!grep -r "TODO" src/
+!!find . -name "*.py" | head -20
 ```
 
 ### Install from source
@@ -300,6 +313,41 @@ Set one interactively with `/themes`, or persist it in config:
 [ui]
 theme = "gruvbox-dark"
 ```
+
+### Shell commands
+
+Kon supports direct shell command execution from the input box using two prefixes:
+
+| Prefix | Behavior |
+| --- | --- |
+| `!command` | Run the command and show the result in chat |
+| `!!command` | Run the command, show the result, and send the output to the LLM for follow-up |
+
+**Examples:**
+
+```bash
+!ls -la              # List files in current directory
+!git status          # Show git status
+!python -m pytest tests/ -v  # Run tests
+
+!!grep -r "TODO" src/    # Search for TODOs and analyze results
+!!find . -name "*.py" | head -20  # Find Python files and get LLM insights
+```
+
+**Features:**
+
+- Commands are executed in the current working directory
+- Output is displayed with syntax highlighting and proper formatting
+- Failed commands show error messages with exit codes
+- Long output is truncated with a link to the full output file
+- Commands timeout after 180 seconds by default
+- Output is sanitized to remove ANSI escape sequences
+
+**Security:**
+
+- Commands run with a sanitized environment (`CI=true`, `NO_COLOR=1`, etc.)
+- Output is limited to prevent excessive memory usage
+- Commands are executed with proper process isolation
 
 ---
 

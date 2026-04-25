@@ -65,6 +65,7 @@ from ..notify import NotificationEvent, notify
 from ..permissions import ApprovalResponse
 from ..session import Session
 from ..tools import DEFAULT_TOOLS, EXTRA_TOOLS, get_tool, get_tools
+from ..tools.bash import BashParams, BashTool
 from ..update_check import get_newer_pypi_version
 from .autocomplete import DEFAULT_COMMANDS, FilePathProvider, SlashCommand, SlashCommandProvider
 from .blocks import HandoffLinkBlock, LaunchWarning
@@ -793,6 +794,11 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         if display_text.startswith("/") and self._handle_command(display_text):
             return
 
+        # Handle shell commands (! and !!)
+        if display_text.startswith("!") or display_text.startswith("!!"):
+            self._handle_shell_command(display_text, event.text)
+            return
+
         query_text = event.query_text.strip()
 
         skill_prompt: str | None = None
@@ -1078,6 +1084,75 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             self.run_worker(self._load_session_by_id(session_id), exclusive=True)
 
         self._show_pending_update_notice_if_idle()
+
+    def _handle_shell_command(self, display_text: str, original_text: str) -> None:
+        """Handle shell commands prefixed with ! or !!"""
+        chat = self.query_one("#chat-log", ChatLog)
+
+        # Determine if we should send output to LLM
+        send_to_llm = display_text.startswith("!!")
+        command_text = display_text[2:] if send_to_llm else display_text[1:]
+        command_text = command_text.strip()
+
+        if not command_text:
+            return
+
+        # Add user message showing the command
+        chat.add_user_message(display_text)
+
+        # Execute the command
+        self.run_worker(self._execute_shell_command(command_text, send_to_llm), exclusive=True)
+
+    async def _execute_shell_command(self, command: str, send_to_llm: bool) -> None:
+        """Execute a shell command and display the result"""
+        chat = self.query_one("#chat-log", ChatLog)
+        status = self.query_one("#status-line", StatusLine)
+
+        try:
+            # Create bash tool instance
+            bash_tool = BashTool()
+
+            # Execute the command
+            status.set_status("running")
+            result = await bash_tool.execute(BashParams(command=command))
+
+            # Start tool block
+            tool_block = chat.start_tool("bash", "shell", f"$ {command}")
+
+            # Display the result
+            if result.success:
+                if result.ui_details:
+                    tool_block.set_result(
+                        result.ui_summary or "Command completed",
+                        result.ui_details,
+                        True,
+                        markup=True,
+                    )
+                else:
+                    tool_block.set_result(result.result or "(no output)", None, True, markup=False)
+            else:
+                tool_block.set_result(
+                    result.ui_summary or "Command failed",
+                    result.ui_details or result.result,
+                    False,
+                    markup=True,
+                )
+
+            # If using !!, send output to LLM for follow-up
+            if send_to_llm and result.result:
+                prompt = (
+                    "Shell command output:\n\n```\n"
+                    f"{result.result}\n```\n\nWhat would you like me to do with this?"
+                )
+                chat.add_user_message("!!" + command)
+                self._is_running = True
+                await self._run_agent(prompt)
+                return
+
+        except Exception as e:
+            chat.add_info_message(f"Error executing command: {e}", error=True)
+        finally:
+            status.set_status("idle")
 
 
 _LOGO = ["█ K █", "█ O █", "█ N █"]

@@ -9,7 +9,7 @@ from copy import deepcopy
 from datetime import datetime
 from importlib import resources
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 
 from pydantic import BaseModel, ValidationError, field_validator
 
@@ -19,6 +19,10 @@ CONFIG_DIR_NAME: str = ".kon"
 
 OnOverflowMode = Literal["continue", "pause"]
 AuthMode = Literal["auto", "required", "none"]
+PermissionMode = Literal["prompt", "auto"]
+NotificationMode = Literal["on", "off"]
+PERMISSION_MODES: tuple[PermissionMode, ...] = get_args(PermissionMode)
+NOTIFICATION_MODES: tuple[NotificationMode, ...] = get_args(NotificationMode)
 
 
 # =================================================================================================
@@ -91,7 +95,7 @@ class AgentConfig(BaseModel):
 
 
 class PermissionsConfig(BaseModel):
-    mode: Literal["prompt", "auto"] = "prompt"
+    mode: PermissionMode = "prompt"
 
 
 class ToolsConfig(BaseModel):
@@ -504,6 +508,14 @@ def reload_config() -> Config:
     return cfg
 
 
+def _set_config_version(data: dict[str, Any]) -> None:
+    meta = data.get("meta")
+    if not isinstance(meta, dict):
+        data["meta"] = {"config_version": CURRENT_CONFIG_VERSION}
+    else:
+        meta["config_version"] = CURRENT_CONFIG_VERSION
+
+
 def set_theme(theme: str) -> Config:
     get_theme(theme)
 
@@ -517,15 +529,51 @@ def set_theme(theme: str) -> Config:
 
     ui["theme"] = theme
     ui.pop("colors", None)
-
-    meta = data.get("meta")
-    if not isinstance(meta, dict):
-        data["meta"] = {"config_version": CURRENT_CONFIG_VERSION}
-    else:
-        meta["config_version"] = CURRENT_CONFIG_VERSION
+    _set_config_version(data)
 
     _atomic_write_text(config_file, _serialize_config_toml(data))
     return reload_config()
+
+
+def set_permission_mode(mode: PermissionMode) -> Config:
+    if mode not in PERMISSION_MODES:
+        raise ValueError(f"Unknown permission mode: {mode}")
+
+    current_config = get_config()
+    current_config._parsed.permissions.mode = mode
+
+    config_file = _ensure_config_file()
+    data = _read_config_data(config_file)
+
+    permissions = data.get("permissions")
+    if not isinstance(permissions, dict):
+        permissions = {}
+        data["permissions"] = permissions
+
+    permissions["mode"] = mode
+    _set_config_version(data)
+
+    _atomic_write_text(config_file, _serialize_config_toml(data))
+    return current_config
+
+
+def set_notifications_enabled(enabled: bool) -> Config:
+    current_config = get_config()
+    current_config._parsed.notifications.enabled = enabled
+
+    config_file = _ensure_config_file()
+    data = _read_config_data(config_file)
+
+    notifications = data.get("notifications")
+    if not isinstance(notifications, dict):
+        notifications = {}
+        data["notifications"] = notifications
+
+    notifications["enabled"] = enabled
+    _set_config_version(data)
+
+    _atomic_write_text(config_file, _serialize_config_toml(data))
+    return current_config
 
 
 def reset_config() -> None:

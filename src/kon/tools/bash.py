@@ -288,11 +288,11 @@ class BashTool(BaseTool):
                 full_output += f"\n[stderr]\n{stderr}" if full_output else f"[stderr]\n{stderr}"
             full_output = full_output.rstrip()
 
+            no_of_output_line = len(full_output.split("\n"))
+
             # Apply truncation unless show_full_output is True
             if params.show_full_output:
-                trunc = TruncationResult(
-                    full_output, False, len(full_output.split("\n")), len(full_output.split("\n"))
-                )
+                trunc = TruncationResult(full_output, False, no_of_output_line, no_of_output_line)
             else:
                 trunc = _truncate_tail(full_output)
                 temp_file_path = None
@@ -307,7 +307,7 @@ class BashTool(BaseTool):
 
             # Use unlimited lines for display when show_full_output is True
             if params.show_full_output:
-                display_text = self._format_display(trunc.content, max_lines=999999)
+                display_text = self._format_display(trunc.content, max_lines=no_of_output_line)
             else:
                 display_text = self._format_display(trunc.content)
 

@@ -27,6 +27,7 @@ Kon is a minimal coding agent focused on a tiny core prompt, a small built-in to
 - [Interactive TUI](#interactive-tui)
   - [Editor and navigation](#editor-and-navigation)
   - [Slash commands](#slash-commands)
+  - [Shell commands](#shell-commands)
   - [Themes](#themes)
 - [Sessions](#sessions)
   - [Resume and continue](#resume-and-continue)
@@ -101,6 +102,18 @@ kon -r 3f2a8c1b-...
 
 # enable the optional web tools
 kon --extra-tools web_search,web_fetch
+```
+
+**Once inside Kon, you can:**
+
+```bash
+# Run shell commands directly
+!ls -la
+!git status
+
+# Run commands and get LLM analysis
+!!grep -r "TODO" src/
+!!find . -name "*.py" | head -20
 ```
 
 ### Install from source
@@ -302,6 +315,26 @@ Set one interactively with `/themes`, or persist it in config:
 ```toml
 [ui]
 theme = "gruvbox-dark"
+```
+
+### Shell commands
+
+Kon supports direct shell command execution from the input box using two prefixes:
+
+| Prefix | Behavior |
+| --- | --- |
+| `!command` | Run the command and show the result in chat |
+| `!!command` | Run the command, show the result, and send the output to the LLM for follow-up |
+
+**Examples:**
+
+```bash
+!ls -la              # List files in current directory
+!git status          # Show git status
+!python -m pytest tests/ -v  # Run tests
+
+!!grep -r "TODO" src/    # Search for TODOs and analyze results
+!!find . -name "*.py" | head -20  # Find Python files and get LLM insights
 ```
 
 ---

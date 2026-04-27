@@ -183,7 +183,10 @@ class BashTool(BaseTool):
         return "\n".join(formatted)
 
     async def execute(
-        self, params: BashParams, cancel_event: asyncio.Event | None = None
+        self,
+        params: BashParams,
+        cancel_event: asyncio.Event | None = None,
+        show_full_output: bool = False,
     ) -> ToolResult:
         if not params.command.strip():
             msg = "Command cannot be empty"
@@ -285,18 +288,29 @@ class BashTool(BaseTool):
                 full_output += f"\n[stderr]\n{stderr}" if full_output else f"[stderr]\n{stderr}"
             full_output = full_output.rstrip()
 
-            trunc = _truncate_tail(full_output)
+            no_of_output_line = len(full_output.split("\n"))
 
-            temp_file_path = None
-            if trunc.truncated:
-                temp_file_path = _write_full_output_to_temp(full_output)
-                trunc.content += (
-                    f"\n\n[output truncated to last {trunc.lines_kept} lines "
-                    f"of {trunc.total_lines}; full output: {temp_file_path}]"
-                )
+            # Apply truncation unless show_full_output is True
+            if show_full_output:
+                trunc = TruncationResult(full_output, False, no_of_output_line, no_of_output_line)
+            else:
+                trunc = _truncate_tail(full_output)
+                temp_file_path = None
+                if trunc.truncated:
+                    temp_file_path = _write_full_output_to_temp(full_output)
+                    trunc.content += (
+                        f"\n\n[output truncated to last {trunc.lines_kept} lines "
+                        f"of {trunc.total_lines}; full output: {temp_file_path}]"
+                    )
 
             result_text = trunc.content or "(no output)"
-            display_text = self._format_display(trunc.content)
+
+            # Use unlimited lines for display when show_full_output is True
+            if show_full_output:
+                display_text = self._format_display(trunc.content, max_lines=no_of_output_line)
+            else:
+                display_text = self._format_display(trunc.content)
+
             non_empty_lines = [line for line in (trunc.content or "").split("\n") if line.strip()]
             is_single_line = len(non_empty_lines) <= 1
 

@@ -10,6 +10,7 @@ from textual.message import Message
 from textual.widgets import Label, Static
 
 from kon import config
+from kon.permissions import ApprovalResponse
 
 from .formatting import format_markdown, strip_markdown_for_collapsed_text
 
@@ -203,6 +204,8 @@ class ToolBlock(Static):
         self._ui_details: str | None = None
         self._success: bool | None = None
         self._awaiting_approval: bool = False
+        self._approval_preview: str | None = None
+        self._approval_selection: ApprovalResponse = ApprovalResponse.APPROVE
         self.add_class("tool-block")
         self._set_state(None)
 
@@ -293,24 +296,42 @@ class ToolBlock(Static):
         else:
             self.add_class("-error")
 
-    def show_approval(self, preview: str | None = None) -> None:
+    def show_approval(
+        self,
+        preview: str | None = None,
+        selected: ApprovalResponse | None = None,
+    ) -> None:
         self._awaiting_approval = True
+        self._approval_preview = preview
+        if selected is not None:
+            self._approval_selection = selected
         self._set_state(None)
         self.query_one("#tool-header", Label).update(self._format_header())
+        self._render_approval_output()
+
+    def update_approval_selection(self, selected: ApprovalResponse) -> None:
+        if not self._awaiting_approval:
+            return
+        self._approval_selection = selected
+        self._render_approval_output()
+
+    def _render_approval_output(self) -> None:
         output = self.query_one("#tool-output", Label)
         self.remove_class("-with-details")
         output.remove_class("-hidden")
         output.remove_class("-details")
 
         content = Text()
-        if preview:
-            content.append_text(self._render_markup_safe(preview))
+        if self._approval_preview:
+            content.append_text(self._render_markup_safe(self._approval_preview))
             content.append("\n\n")
-        content.append_text(self._format_approval_controls())
+        content.append_text(self._format_approval_controls(self._approval_selection))
         output.update(content)
 
     def hide_approval(self) -> None:
         self._awaiting_approval = False
+        self._approval_preview = None
+        self._approval_selection = ApprovalResponse.APPROVE
         self._set_state(None)
         self.query_one("#tool-header", Label).update(self._format_header())
         output = self.query_one("#tool-output", Label)
@@ -319,14 +340,30 @@ class ToolBlock(Static):
         output.add_class("-hidden")
         output.update(Text(""))
 
-    def _format_approval_controls(self) -> Text:
+    def _format_approval_controls(
+        self, selected: ApprovalResponse = ApprovalResponse.APPROVE
+    ) -> Text:
         colors = config.ui.colors
         text = Text()
-        text.append("[y] approve ", style=Style(bgcolor=colors.accent, color=colors.bg, bold=True))
-        text.append("  ")
-        text.append(
-            "[n] deny ", style=Style(bgcolor=colors.panel_alt, color=colors.dim, bold=True)
+        # The non-selected button uses the dim panel_alt background; the
+        # selected one gets the accent. Direct y/n keys submit immediately;
+        # left/right move the highlight; enter submits the highlight.
+        approve_selected = selected == ApprovalResponse.APPROVE
+        approve_style = Style(
+            bgcolor=colors.accent if approve_selected else colors.panel_alt,
+            color=colors.bg if approve_selected else colors.dim,
+            bold=True,
         )
+        deny_style = Style(
+            bgcolor=colors.accent if not approve_selected else colors.panel_alt,
+            color=colors.bg if not approve_selected else colors.dim,
+            bold=True,
+        )
+        text.append("[y] approve ", style=approve_style)
+        text.append("  ")
+        text.append("[n] deny ", style=deny_style)
+        text.append("  ")
+        text.append("(← → enter)", style=Style(color=colors.dim))
         return text
 
     def update_call_msg(self, call_msg: str) -> None:

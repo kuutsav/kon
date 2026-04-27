@@ -8,6 +8,7 @@ from textual.timer import Timer
 from textual.widgets import Label
 
 from kon import config
+from kon.permissions import ApprovalResponse
 
 from .blocks import (
     ContentBlock,
@@ -393,11 +394,23 @@ class ChatLog(VerticalScroll):
             block.update_call_msg(call_msg)
             self._scroll_if_anchored(animate=False)
 
-    def show_tool_approval(self, tool_id: str, preview: str | None = None) -> None:
+    def show_tool_approval(
+        self,
+        tool_id: str,
+        preview: str | None = None,
+        selected: ApprovalResponse | None = None,
+    ) -> None:
         block = self._tool_blocks.get(tool_id)
         if block:
-            block.show_approval(preview=preview)
+            block.show_approval(preview=preview, selected=selected)
             self._scroll_if_anchored(animate=False)
+
+    def update_tool_approval_selection(
+        self, tool_id: str, selected: ApprovalResponse
+    ) -> None:
+        block = self._tool_blocks.get(tool_id)
+        if block:
+            block.update_approval_selection(selected)
 
     def hide_tool_approval(self, tool_id: str) -> None:
         block = self._tool_blocks.get(tool_id)

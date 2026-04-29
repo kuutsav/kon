@@ -178,6 +178,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         self._current_block_type: str | None = None
         self._approval_future: asyncio.Future[ApprovalResponse] | None = None
         self._approval_tool_id: str | None = None
+        self._approval_selection: ApprovalResponse = ApprovalResponse.APPROVE
         self._hide_thinking = False
         self._fd_path: str | None = None
         self._selection_mode: SelectionMode | None = None
@@ -777,10 +778,29 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
     def on_key(self, event: events.Key) -> None:
         if self._approval_future is None or self._approval_future.done():
             return
+        # Direct y/n keys still work and submit immediately, matching prior
+        # behaviour. Left/right move the highlight between the two buttons
+        # without submitting; enter submits the highlighted button.
         if event.key in ("y", "Y"):
             self._approval_future.set_result(ApprovalResponse.APPROVE)
         elif event.key in ("n", "N"):
             self._approval_future.set_result(ApprovalResponse.DENY)
+        elif event.key in ("left", "right"):
+            self._approval_selection = (
+                ApprovalResponse.DENY
+                if self._approval_selection == ApprovalResponse.APPROVE
+                else ApprovalResponse.APPROVE
+            )
+            if self._approval_tool_id is not None:
+                chat = self.query_one("#chat-log", ChatLog)
+                chat.update_tool_approval_selection(
+                    self._approval_tool_id, self._approval_selection
+                )
+            event.prevent_default()
+            event.stop()
+            return
+        elif event.key == "enter":
+            self._approval_future.set_result(self._approval_selection)
         else:
             return
         event.prevent_default()
@@ -972,7 +992,10 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                             tool_call_id=id, tool_name=name, display=disp, future=f
                         ):
                             self.app.bell()
-                            chat.show_tool_approval(id, preview=disp or None)
+                            self._approval_selection = ApprovalResponse.APPROVE
+                            chat.show_tool_approval(
+                                id, preview=disp or None, selected=self._approval_selection
+                            )
                             self._approval_future = f
                             self._approval_tool_id = id
 

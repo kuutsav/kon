@@ -4,6 +4,7 @@ from pathlib import Path
 
 import aiofiles
 from pydantic import BaseModel, Field
+from rich.markup import escape
 
 from kon import config
 
@@ -141,7 +142,7 @@ def format_diff_display(diff: str) -> str:
             continue
 
         truncated = line[:200] + "..." if len(line) > 203 else line
-        escaped = truncated.replace("[", "\\[")
+        escaped = escape(truncated)
 
         if line.startswith("-"):
             formatted.append(f"[{colors.diff_removed}]{escaped}[/{colors.diff_removed}]")

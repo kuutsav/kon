@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar, cast
 
 from kon import config, set_notifications_mode, set_permission_mode, set_theme
 from kon.config import NOTIFICATION_MODES, PERMISSION_MODES, NotificationMode, PermissionMode
@@ -34,6 +35,9 @@ from .widgets import InfoBar, StatusLine, format_path
 
 if TYPE_CHECKING:
     pass
+
+
+Choice = TypeVar("Choice", bound=str)
 
 
 class CommandsMixin:
@@ -176,6 +180,67 @@ Extra tools:
         chat = self.query_one("#chat-log", ChatLog)
         chat.add_info_message("Conversation cleared")
 
+    def _show_selection_picker(
+        self,
+        items: list[ListItem],
+        selection_mode: SelectionMode,
+        *,
+        searchable: bool = True,
+        max_label_width: int | None = None,
+    ) -> None:
+        completion_list = self.query_one("#completion-list", FloatingList)
+        if max_label_width is None:
+            completion_list.show(items, searchable=searchable)
+        else:
+            completion_list.show(items, searchable=searchable, max_label_width=max_label_width)
+
+        input_box = self.query_one("#input-box", InputBox)
+        input_box.clear()
+        input_box.set_autocomplete_enabled(False)
+        input_box.set_completing(True)
+        input_box.focus()
+        self._selection_mode = selection_mode
+
+    def _build_choice_items(
+        self, choices: Sequence[Choice], current: Choice, descriptions: Mapping[Choice, str]
+    ) -> list[ListItem[Choice]]:
+        return [
+            ListItem(
+                value=choice,
+                label=f"{choice} ✓" if choice == current else choice,
+                description=descriptions[choice],
+            )
+            for choice in choices
+        ]
+
+    def _handle_choice_command(
+        self,
+        args: str,
+        *,
+        name: str,
+        choices: Sequence[Choice],
+        current: Choice,
+        descriptions: Mapping[Choice, str],
+        selection_mode: SelectionMode,
+        select: Callable[[Choice], None],
+    ) -> None:
+        chat = self.query_one("#chat-log", ChatLog)
+
+        requested = args.strip()
+        if requested:
+            if requested in choices:
+                select(cast(Choice, requested))
+            else:
+                valid = ", ".join(choices)
+                chat.add_info_message(
+                    f"Invalid {name} mode: {requested}. Use one of: {valid}", error=True
+                )
+            return
+
+        self._show_selection_picker(
+            self._build_choice_items(choices, current, descriptions), selection_mode
+        )
+
     def _handle_model_command(self, args: str) -> None:
         models = get_all_models()
         if not models:
@@ -195,15 +260,7 @@ Extra tools:
             )
             items.append(ListItem(value=m, label=label, description=caption))
 
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.MODEL
+        self._show_selection_picker(items, SelectionMode.MODEL)
 
     def _handle_themes_command(self, args: str) -> None:
         chat = self.query_one("#chat-log", ChatLog)
@@ -226,53 +283,22 @@ Extra tools:
             for theme_id, label in get_theme_options()
         ]
 
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.THEME
+        self._show_selection_picker(items, SelectionMode.THEME)
 
     def _handle_permissions_command(self, args: str) -> None:
-        chat = self.query_one("#chat-log", ChatLog)
-
-        requested = args.strip()
-        if requested:
-            if requested in PERMISSION_MODES:
-                self._select_permission_mode(requested)
-            else:
-                valid_modes = ", ".join(PERMISSION_MODES)
-                chat.add_info_message(
-                    f"Invalid permission mode: {requested}. Use one of: {valid_modes}", error=True
-                )
-            return
-
-        current_mode = config.permissions.mode
         descriptions: dict[PermissionMode, str] = {
             "prompt": "ask before mutating tool calls",
             "auto": "allow tool calls without approval prompts",
         }
-        items = [
-            ListItem(
-                value=mode,
-                label=f"{mode} ✓" if mode == current_mode else mode,
-                description=descriptions[mode],
-            )
-            for mode in PERMISSION_MODES
-        ]
-
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.PERMISSIONS
+        self._handle_choice_command(
+            args,
+            name="permission",
+            choices=PERMISSION_MODES,
+            current=config.permissions.mode,
+            descriptions=descriptions,
+            selection_mode=SelectionMode.PERMISSIONS,
+            select=self._select_permission_mode,
+        )
 
     def _select_permission_mode(self, mode: PermissionMode) -> None:
         set_permission_mode(mode)
@@ -298,25 +324,13 @@ Extra tools:
                 )
             return
 
-        current_level = self._thinking_level
-        items = [
-            ListItem(
-                value=level,
-                label=f"{level} ✓" if level == current_level else level,
-                description="current session only",
-            )
-            for level in self._provider.thinking_levels
-        ]
-
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.THINKING
+        descriptions = {level: "current session only" for level in self._provider.thinking_levels}
+        self._show_selection_picker(
+            self._build_choice_items(
+                self._provider.thinking_levels, self._thinking_level, descriptions
+            ),
+            SelectionMode.THINKING,
+        )
 
     def _select_thinking_level(self, level: str) -> None:
         if self._provider is None:
@@ -336,42 +350,20 @@ Extra tools:
         chat.show_status(f"Thinking level changed to {level}")
 
     def _handle_notifications_command(self, args: str) -> None:
-        chat = self.query_one("#chat-log", ChatLog)
-
-        requested = args.strip()
-        if requested:
-            if requested in NOTIFICATION_MODES:
-                self._select_notifications_mode(requested)
-            else:
-                valid = ", ".join(NOTIFICATION_MODES)
-                chat.add_info_message(
-                    f"Invalid notifications mode: {requested}. Use one of: {valid}", error=True
-                )
-            return
-
         current: NotificationMode = "on" if config.notifications.enabled else "off"
         descriptions: dict[NotificationMode, str] = {
             "on": "play notification sounds",
             "off": "disable notification sounds",
         }
-        items = [
-            ListItem(
-                value=mode,
-                label=f"{mode} ✓" if mode == current else mode,
-                description=descriptions[mode],
-            )
-            for mode in NOTIFICATION_MODES
-        ]
-
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.NOTIFICATIONS
+        self._handle_choice_command(
+            args,
+            name="notifications",
+            choices=NOTIFICATION_MODES,
+            current=current,
+            descriptions=descriptions,
+            selection_mode=SelectionMode.NOTIFICATIONS,
+            select=self._select_notifications_mode,
+        )
 
     def _select_notifications_mode(self, mode: NotificationMode) -> None:
         set_notifications_mode(mode)
@@ -616,15 +608,7 @@ Extra tools:
             )
             return
 
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True, max_label_width=90)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.SESSION
+        self._show_selection_picker(items, SelectionMode.SESSION, max_label_width=90)
 
     def _delete_selected_resume_session(self) -> None:
         if self._selection_mode != SelectionMode.SESSION:
@@ -692,15 +676,7 @@ Extra tools:
             description = "logged in" if p["logged_in"] else ""
             items.append(ListItem(value=p["id"], label=label, description=description))
 
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.LOGIN
+        self._show_selection_picker(items, SelectionMode.LOGIN)
 
     def _select_login_provider(self, provider_id: str) -> None:
         chat = self.query_one("#chat-log", ChatLog)
@@ -786,15 +762,7 @@ Extra tools:
         for p in providers:
             items.append(ListItem(value=p["id"], label=p["name"], description=""))
 
-        completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.show(items, searchable=True)
-
-        input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
-        self._selection_mode = SelectionMode.LOGOUT
+        self._show_selection_picker(items, SelectionMode.LOGOUT)
 
     def _select_logout_provider(self, provider_id: str) -> None:
         from kon.llm import clear_copilot_credentials

@@ -35,9 +35,79 @@ warning = "#123456"
     assert "colors" not in updated["ui"]
     assert updated["llm"]["auth"]["openai_compat"] == "auto"
     assert updated["llm"]["auth"]["anthropic_compat"] == "auto"
+    assert updated["notifications"]["volume"] == 0.5
 
     backup_files = list(config_dir.glob("config.toml.bak.*"))
     assert len(backup_files) == 1
+
+    warnings = consume_config_warnings()
+    assert any("Migrated config" in warning for warning in warnings)
+
+
+def test_v4_config_migrates_notification_volume_without_overwriting_existing_value(
+    tmp_path, monkeypatch
+):
+    home = tmp_path / "home"
+    config_dir = home / ".kon"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "config.toml"
+    config_file.write_text(
+        """
+[meta]
+config_version = 4
+
+[notifications]
+enabled = true
+volume = 0.25
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    reset_config()
+    cfg = get_config()
+
+    assert cfg.notifications.enabled is True
+    assert cfg.notifications.volume == 0.25
+
+    updated = tomllib.loads(config_file.read_text(encoding="utf-8"))
+    assert updated["meta"]["config_version"] == CURRENT_CONFIG_VERSION
+    assert updated["notifications"]["volume"] == 0.25
+
+    warnings = consume_config_warnings()
+    assert any("Migrated config" in warning for warning in warnings)
+
+
+def test_v4_config_migrates_missing_notification_volume(tmp_path, monkeypatch):
+    home = tmp_path / "home"
+    config_dir = home / ".kon"
+    config_dir.mkdir(parents=True)
+    config_file = config_dir / "config.toml"
+    config_file.write_text(
+        """
+[meta]
+config_version = 4
+
+[notifications]
+enabled = true
+""".strip()
+        + "\n",
+        encoding="utf-8",
+    )
+
+    monkeypatch.setattr(Path, "home", lambda: home)
+
+    reset_config()
+    cfg = get_config()
+
+    assert cfg.notifications.enabled is True
+    assert cfg.notifications.volume == 0.5
+
+    updated = tomllib.loads(config_file.read_text(encoding="utf-8"))
+    assert updated["meta"]["config_version"] == CURRENT_CONFIG_VERSION
+    assert updated["notifications"]["volume"] == 0.5
 
     warnings = consume_config_warnings()
     assert any("Migrated config" in warning for warning in warnings)

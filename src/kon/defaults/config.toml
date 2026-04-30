@@ -1,5 +1,5 @@
 [meta]
-config_version = 4
+config_version = 5
 
 [llm]
 default_provider = "openai-codex" # "zhipu", "github-copilot", "openai-codex"
@@ -78,3 +78,5 @@ mode = "prompt" # "prompt" or "auto"
 # Play audio when kon finishes a task, hits an error, or waits for tool approval.
 # Disabled by default.
 enabled = false
+# Audio playback volume from 0.0 (muted) to 1.0 (full volume).
+volume = 0.5

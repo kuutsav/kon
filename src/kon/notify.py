@@ -8,6 +8,8 @@ from importlib import resources
 from pathlib import Path
 from typing import Literal
 
+from kon import config
+
 NotificationEvent = Literal["completion", "permission", "error"]
 
 _SOUND_FILES: dict[NotificationEvent, str] = {
@@ -39,11 +41,11 @@ def _run(command: list[str]) -> None:
     subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 
-def _play_macos(sound_path: Path) -> None:
-    _run(["afplay", str(sound_path)])
+def _play_macos(sound_path: Path, volume: float) -> None:
+    _run(["afplay", "-v", str(volume), str(sound_path)])
 
 
-def _play_linux(sound_path: Path) -> None:
+def _play_linux(sound_path: Path, volume: float) -> None:
     player = _linux_player()
     if player is None:
         return
@@ -51,7 +53,7 @@ def _play_linux(sound_path: Path) -> None:
     sound = str(sound_path)
     match player:
         case "paplay":
-            _run(["paplay", sound])
+            _run(["paplay", f"--volume={round(volume * 65536)}", sound])
         case "aplay":
             _run(["aplay", sound])
         case "mpv":
@@ -61,21 +63,34 @@ def _play_linux(sound_path: Path) -> None:
                     "--no-video",
                     "--no-terminal",
                     "--script-opts=autoload-disabled=yes",
+                    f"--volume={volume * 100}",
                     sound,
                 ]
             )
         case "ffplay":
-            _run(["ffplay", "-nodisp", "-autoexit", "-loglevel", "quiet", sound])
+            _run(
+                [
+                    "ffplay",
+                    "-nodisp",
+                    "-autoexit",
+                    "-loglevel",
+                    "quiet",
+                    "-volume",
+                    str(round(volume * 100)),
+                    sound,
+                ]
+            )
 
 
 def notify(event: NotificationEvent) -> None:
     sound_path = _sound_path(event)
+    volume = config.notifications.volume
     os_name = _platform()
 
     try:
         if os_name == "darwin":
-            _play_macos(sound_path)
+            _play_macos(sound_path, volume)
         elif os_name == "linux":
-            _play_linux(sound_path)
+            _play_linux(sound_path, volume)
     except Exception:
         return

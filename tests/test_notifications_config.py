@@ -11,6 +11,7 @@ def test_notifications_disabled_by_default(tmp_path, monkeypatch):
     cfg = get_config()
 
     assert cfg.notifications.enabled is False
+    assert cfg.notifications.volume == 0.5
 
 
 def test_notifications_can_be_enabled(tmp_path, monkeypatch):
@@ -51,6 +52,7 @@ mode = "prompt"
 
 [notifications]
 enabled = true
+volume = 0.25
 """.strip()
         + "\n",
         encoding="utf-8",
@@ -62,3 +64,4 @@ enabled = true
     cfg = get_config()
 
     assert cfg.notifications.enabled is True
+    assert cfg.notifications.volume == 0.25

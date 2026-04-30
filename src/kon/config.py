@@ -11,7 +11,7 @@ from importlib import resources
 from pathlib import Path
 from typing import Any, Literal, get_args
 
-from pydantic import BaseModel, ValidationError, field_validator
+from pydantic import BaseModel, Field, ValidationError, field_validator
 
 from .themes import ColorsConfig, get_theme, get_theme_ids
 
@@ -104,6 +104,7 @@ class ToolsConfig(BaseModel):
 
 class NotificationsConfig(BaseModel):
     enabled: bool = False
+    volume: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class ConfigSchema(BaseModel):
@@ -326,6 +327,23 @@ def _migrate_v3_to_v4(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_v4_to_v5(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = Config._apply_legacy_key_shims(data)
+    notifications = migrated.get("notifications")
+    if not isinstance(notifications, dict):
+        notifications = {}
+        migrated["notifications"] = notifications
+
+    notifications.setdefault("volume", 0.5)
+
+    meta = migrated.get("meta")
+    if not isinstance(meta, dict):
+        migrated["meta"] = {"config_version": 5}
+    else:
+        meta["config_version"] = 5
+    return migrated
+
+
 def _migrate_config_data(data: dict[str, Any]) -> tuple[dict[str, Any], int, int, bool]:
     original = deepcopy(data)
     current_version = _get_config_version(original)
@@ -347,6 +365,10 @@ def _migrate_config_data(data: dict[str, Any]) -> tuple[dict[str, Any], int, int
         if current_version == 3:
             migrated = _migrate_v3_to_v4(migrated)
             current_version = 4
+            continue
+        if current_version == 4:
+            migrated = _migrate_v4_to_v5(migrated)
+            current_version = 5
             continue
         break
 

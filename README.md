@@ -196,6 +196,7 @@ theme = "gruvbox-dark"
 
 [notifications]
 enabled = true
+volume = 0.5
 
 [permissions]
 mode = "prompt"

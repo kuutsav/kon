@@ -1,3 +1,4 @@
+from contextlib import contextmanager
 from typing import Any, ClassVar, cast
 
 from kon import config, reset_config
@@ -95,6 +96,10 @@ class FakeCommands(CommandsMixin):
         self._runtime.provider = self._provider
         self._runtime.session = self._session
         self.applied_thinking_levels: list[str] = []
+
+    @contextmanager
+    def batch_update(self):
+        yield
 
     def query_one(self, selector, widget_type):
         if selector == "#chat-log":

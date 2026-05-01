@@ -1,3 +1,5 @@
+from contextlib import contextmanager
+
 from kon import Config, reset_config, set_config
 from kon.ui.autocomplete import DEFAULT_COMMANDS, SlashCommand
 from kon.ui.commands import CommandsMixin
@@ -58,6 +60,10 @@ class FakeCommands(CommandsMixin):
         self.input_box = FakeInputBox()
         self._selection_mode = None
         self.selected_modes: list[str] = []
+
+    @contextmanager
+    def batch_update(self):
+        yield
 
     def query_one(self, selector, widget_type):
         if selector == "#chat-log":

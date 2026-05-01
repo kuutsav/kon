@@ -165,11 +165,7 @@ class FloatingList[T](Widget):
         self._description_width = self._compute_description_width()
         self._label_width = self._compute_label_width()
         self._visible = True
-        self.add_class("-visible")
         self._render_key += 1
-        # Force layout refresh to prevent visual artifacts in adjacent widgets
-        if self.screen:
-            self.screen.refresh(layout=True)
 
     def hide(self) -> None:
         self._visible = False
@@ -178,10 +174,6 @@ class FloatingList[T](Widget):
         self._selected_index = 0
         self._search_enabled = False
         self._search_query = ""
-        self.remove_class("-visible")
-        # Force layout refresh to prevent visual artifacts in adjacent widgets
-        if self.screen:
-            self.screen.refresh(layout=True)
 
     def set_search_query(self, query: str) -> None:
         if not self._search_enabled:

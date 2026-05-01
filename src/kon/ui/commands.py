@@ -175,16 +175,19 @@ Extra tools:
         max_label_width: int | None = None,
     ) -> None:
         completion_list = self.query_one("#completion-list", FloatingList)
-        if max_label_width is None:
-            completion_list.show(items, searchable=searchable)
-        else:
-            completion_list.show(items, searchable=searchable, max_label_width=max_label_width)
-
         input_box = self.query_one("#input-box", InputBox)
-        input_box.clear()
-        input_box.set_autocomplete_enabled(False)
-        input_box.set_completing(True)
-        input_box.focus()
+
+        with self.batch_update():  # type: ignore[attr-defined]
+            if max_label_width is None:
+                completion_list.show(items, searchable=searchable)
+            else:
+                completion_list.show(items, searchable=searchable, max_label_width=max_label_width)
+
+            input_box.clear()
+            input_box.set_autocomplete_enabled(False)
+            input_box.set_completing(True)
+            input_box.focus()
+
         self._selection_mode = selection_mode
 
     def _build_choice_items(

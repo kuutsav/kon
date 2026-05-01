@@ -491,16 +491,18 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
     @on(InputBox.CompletionHide)
     def on_completion_hide(self, event: InputBox.CompletionHide) -> None:
         completion_list = self.query_one("#completion-list", FloatingList)
-        completion_list.hide()
-
         input_box = self.query_one("#input-box", InputBox)
-        if self._selection_mode is not None:
-            self._selection_mode = None
-            input_box.clear()
-            input_box.set_autocomplete_enabled(True)
-            self._reset_ctrl_d_delete_state()
 
-        input_box.set_completing(False)
+        with self.batch_update():
+            completion_list.hide()
+
+            if self._selection_mode is not None:
+                self._selection_mode = None
+                input_box.clear()
+                input_box.set_autocomplete_enabled(True)
+                self._reset_ctrl_d_delete_state()
+
+            input_box.set_completing(False)
 
     @on(InputBox.CompletionSelect)
     def on_completion_select(self, event: InputBox.CompletionSelect) -> None:
@@ -515,13 +517,14 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             return
 
         if self._selection_mode is not None:
-            completion_list.hide()
             selection_mode = self._selection_mode
-            self._selection_mode = None
-            input_box.clear()
-            input_box.set_autocomplete_enabled(True)
-            input_box.set_completing(False)
-            self._reset_ctrl_d_delete_state()
+            with self.batch_update():
+                completion_list.hide()
+                self._selection_mode = None
+                input_box.clear()
+                input_box.set_autocomplete_enabled(True)
+                input_box.set_completing(False)
+                self._reset_ctrl_d_delete_state()
 
             match selection_mode:
                 case SelectionMode.SESSION:

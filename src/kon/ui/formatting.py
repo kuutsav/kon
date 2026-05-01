@@ -21,9 +21,8 @@ _MARKDOWN_THEME: Theme | None = None
 def get_markdown_theme() -> Theme:
     global _MARKDOWN_THEME
     if _MARKDOWN_THEME is None:
-        heading_color = config.ui.colors.markdown_heading
         code_color = config.ui.colors.markdown_code
-        heading_style = Style(color=heading_color, bold=True)
+        heading_style = Style(bold=True)
         _MARKDOWN_THEME = Theme(
             {
                 "markdown.h1": heading_style,
@@ -33,6 +32,8 @@ def get_markdown_theme() -> Theme:
                 "markdown.h5": heading_style,
                 "markdown.h6": heading_style,
                 "markdown.code": Style(color=code_color),
+                "markdown.table.header": Style(bold=True),
+                "markdown.table.border": Style(),
             }
         )
     return _MARKDOWN_THEME

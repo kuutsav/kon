@@ -105,6 +105,14 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         Binding("shift+tab", "cycle_permission_mode", "Cycle permission mode", priority=True),
     ]
 
+    _ANSI_THEME_PREFERENCE = ("textual-ansi", "ansi-dark")
+
+    def _resolve_ansi_theme(self) -> str:
+        for name in self._ANSI_THEME_PREFERENCE:
+            if name in self.available_themes:
+                return name
+        return "textual-dark"
+
     def __init__(
         self,
         cwd: str | None = None,
@@ -120,7 +128,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         anthropic_compat_auth_mode: AuthMode | None = None,
     ):
         super().__init__()
-        self.theme = "textual-ansi"
+        self.theme = self._resolve_ansi_theme()
         self._cwd = cwd or os.getcwd()
         initial_model = model or config.llm.default_model
         initial_model_provider = (

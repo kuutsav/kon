@@ -27,8 +27,8 @@ KON_THEME_TO_GHOSTTY_THEME = {
     "one-light": "Atom One Light",
     "palenight": "Pale Night Hc",
     "rosepine": "Rose Pine",
-    "solarized-dark": "Builtin Solarized Dark",
-    "solarized-light": "Builtin Solarized Light",
+    "solarized-dark": "Solarized Dark Higher Contrast",
+    "solarized-light": "iTerm2 Solarized Light",
     "tokyo-day": "TokyoNight Day",
     "tokyo-night": "TokyoNight Night",
 }

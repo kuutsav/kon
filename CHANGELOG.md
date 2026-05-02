@@ -6,6 +6,61 @@ All notable changes to this project will be documented in this file.
 
 - No changes yet.
 
+## 0.3.7 - 2026-05-02
+
+### Added
+
+- Added shell command execution from within Kon - @sukhbinder, with review help from @Meltedd.
+- Added shell command input highlighting.
+- Added shell command execution state handling, cancellation support, and output truncation/display controls - @sukhbinder, with review help from @Meltedd.
+- Added slash controls for runtime modes.
+- Added persisted runtime setting helpers.
+- Added permission mode display in the info bar.
+- Added standardized thinking levels.
+- Added audio notifications with configurable volume.
+- Added textual bell notifications for approval prompts - @sukhbinder.
+- Added keyboard navigation to the permission approval popup - @mvanhorn, with review help from @Meltedd.
+- Added GPT-5.5 models.
+- Added more built-in themes.
+
+### Changed
+
+- Centralized conversation runtime orchestration.
+- Made permission and notification toggles session-scoped.
+- Restored minimal thinking level across providers.
+- Unified `/help` and `/session` output formatting with aligned columns.
+- Refined help/session column spacing.
+- Used `batch_update` to reduce completion list transition flicker.
+- Deduplicated command selection pickers.
+- Removed dead disk-persisting permission/notification helpers.
+- Removed `show_full_output` from bash parameters - @sukhbinder, based on review feedback from @Meltedd.
+
+### Fixed
+
+- Fixed safe escaping for diff markup.
+- Fixed interrupted and long-running shell command handling - @sukhbinder, with review help from @Meltedd.
+- Fixed actual line-count handling for output truncation and display limits - @sukhbinder.
+- Fixed keyboard event forwarding for approval popup navigation - @mvanhorn, based on review feedback from @Meltedd.
+- Fixed InfoBar row label assignment.
+- Fixed status hint layout updates.
+- Fixed streaming markdown to defer until newline.
+- Fixed notification sound behavior and switched to WAV notification sounds.
+- Fixed Textual theme updates.
+- Refined Everforest theme colors.
+- Fixed markdown heading and table header styling to use bold-only formatting.
+- Fixed scroll-to-bottom behavior on new user message submit.
+- Fixed file change totals placement in modal title.
+- Worked around `html-to-markdown` 3.3.x regression - @bkutasi.
+- Reverted thinking block left border color to `colors.border`.
+
+### Docs / Tests
+
+- Added e2e coverage review documentation.
+- Expanded tmux e2e runtime coverage.
+- Updated README notification config example.
+- Updated shell command tests - @sukhbinder, based on review feedback from @Meltedd.
+- Added approval keyboard navigation tests - @mvanhorn, based on review feedback from @Meltedd.
+
 ## 0.3.6 - 2026-04-23
 
 ### Added

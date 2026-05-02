@@ -28,6 +28,8 @@ class ListItem[T]:
     value: T
     label: str
     description: str = ""
+    prefix: str = ""
+    prefix_style: str = ""
 
     def __hash__(self) -> int:
         return hash((self.label, self.description))
@@ -289,13 +291,20 @@ class FloatingList[T](Widget):
         else:
             text.append("  ")
 
+        # Prefix (e.g. tree indent) rendered with its own style
+        prefix = item.prefix
+        if prefix:
+            text.append(prefix, style=item.prefix_style or "")
+
         # Label (truncated if too long, padded to computed width + gap)
+        prefix_len = len(prefix)
+        effective_label_width = max(1, self._label_width - prefix_len)
         raw_label = item.label
-        if len(raw_label) > self._label_width:
-            label = raw_label[: self._label_width - 1] + "…"
+        if len(raw_label) > effective_label_width:
+            label = raw_label[: effective_label_width - 1] + "…"
         else:
             label = raw_label
-        label = label.ljust(self._label_width + 4)
+        label = label.ljust(effective_label_width + 4)
         if is_selected:
             text.append(label, style=selected_color)
         else:

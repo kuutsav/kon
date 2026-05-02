@@ -632,3 +632,58 @@ def test_extract_preview_from_regular_user_message():
     content = "fix flaky test in resume"
 
     assert Session._extract_preview_from_user_message(content) == "fix flaky test in resume"
+
+
+def test_build_session_info_extracts_parent_session_id(tmp_path, monkeypatch):
+    monkeypatch.setattr("kon.session.Session.get_sessions_dir", lambda cwd: tmp_path)
+
+    parent = Session.create("/test/project")
+    parent.append_message(AssistantMessage(content=[TextContent(text="hi")]))
+    parent_id = parent.id
+
+    child = Session.create("/test/project")
+    child.append_custom_message(
+        "handoff_backlink",
+        f"Handoff from {parent_id[:8]}",
+        display=False,
+        details={"target_session_id": parent_id, "query": "do something"},
+    )
+    child.ensure_persisted()
+    child.append_message(UserMessage(content="child task"))
+    child.append_message(AssistantMessage(content=[TextContent(text="ok")]))
+
+    assert child.session_file is not None
+    info = Session.build_session_info(child.session_file)
+    assert info is not None
+    assert info.parent_session_id == parent_id
+
+    assert parent.session_file is not None
+    parent_info = Session.build_session_info(parent.session_file)
+    assert parent_info is not None
+    assert parent_info.parent_session_id is None
+
+
+def test_session_list_includes_parent_session_id(tmp_path, monkeypatch):
+    monkeypatch.setattr("kon.session.Session.get_sessions_dir", lambda cwd: tmp_path)
+
+    parent = Session.create("/test/project")
+    parent.append_message(UserMessage(content="parent task"))
+    parent.append_message(AssistantMessage(content=[TextContent(text="ok")]))
+    parent_id = parent.id
+
+    child = Session.create("/test/project")
+    child.append_custom_message(
+        "handoff_backlink",
+        f"Handoff from {parent_id[:8]}",
+        display=False,
+        details={"target_session_id": parent_id, "query": "sub task"},
+    )
+    child.ensure_persisted()
+    child.append_message(UserMessage(content="child task"))
+    child.append_message(AssistantMessage(content=[TextContent(text="done")]))
+
+    sessions = Session.list("/test/project")
+    by_id = {s.id: s for s in sessions}
+
+    assert by_id[parent_id].parent_session_id is None
+    assert by_id[child.id].parent_session_id == parent_id

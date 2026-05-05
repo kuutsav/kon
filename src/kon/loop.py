@@ -57,8 +57,13 @@ def build_system_prompt(
 
     if tools:
         guidelines: list[str] = []
+        seen_guidelines: set[str] = set()
         for tool in tools:
-            guidelines.extend(tool.prompt_guidelines)
+            for guideline in tool.prompt_guidelines:
+                if guideline in seen_guidelines:
+                    continue
+                guidelines.append(guideline)
+                seen_guidelines.add(guideline)
         if guidelines:
             prompt += "\n\n# Tool usage\n\n- " + "\n- ".join(guidelines)
 

@@ -131,9 +131,9 @@ class BashTool(BaseTool):
     name = "bash"
     tool_icon = "$"
     params = BashParams
-    prompt_guidelines = [
-        "Use bash for terminal operations (git, package managers, builds, tests, running scripts)"
-    ]
+    prompt_guidelines = (
+        "Use bash for terminal operations (git, package managers, builds, tests, running scripts)",
+    )
     description = (
         "Execute a bash command in the current working directory. "
         f"Output truncated to last {MAX_OUTPUT_LINES} lines or {MAX_OUTPUT_BYTES // 1024}KB. "

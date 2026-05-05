@@ -141,9 +141,9 @@ class WebFetchTool(BaseTool):
     tool_icon = "%"
     mutating = False
     params = WebFetchParams
-    prompt_guidelines = [
-        "Use web_search first to find relevant URLs (if not provided by the user)"
-    ]
+    prompt_guidelines = (
+        "Use web_search first to find relevant URLs (if not provided by the user)",
+    )
     description = (
         "Fetch a web page and extract its main content as clean markdown. "
         "Strips navigation, ads, and boilerplate. "

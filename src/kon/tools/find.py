@@ -31,7 +31,7 @@ class FindTool(BaseTool):
     tool_icon = "*"
     params = FindParams
     mutating = False
-    prompt_guidelines = ["Use find to search for files by name/glob (NOT find or ls via bash)"]
+    prompt_guidelines = ("Use find to search for files by name/glob (NOT find or ls via bash)",)
     description = (
         "Search for files by glob pattern using fd. "
         "Returns matching file paths relative to the search directory, "

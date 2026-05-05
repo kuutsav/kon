@@ -20,9 +20,9 @@ class WriteTool(BaseTool):
     name = "write"
     tool_icon = "+"
     params = WriteParams
-    prompt_guidelines = [
-        "Use write only for new files or complete rewrites (NOT echo >/cat <<EOF)"
-    ]
+    prompt_guidelines = (
+        "Use write only for new files or complete rewrites (NOT echo >/cat <<EOF)",
+    )
     description = (
         "Write content to a file. Creates the file if it doesn't exist, overwrites if it does. "
         "Automatically creates parent directories."

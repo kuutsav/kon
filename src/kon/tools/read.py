@@ -36,7 +36,7 @@ class ReadTool(BaseTool):
     tool_icon = "→"
     params = ReadParams
     mutating = False
-    prompt_guidelines = ["Use read to view files (NOT cat/head/tail)"]
+    prompt_guidelines = ("Use read to view files (NOT cat/head/tail)",)
     description = (
         "Read the contents of a file or directory. "
         f"File reads truncate to {MAX_LINES_PER_FILE} lines and "

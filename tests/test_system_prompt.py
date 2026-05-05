@@ -19,6 +19,10 @@ def test_system_prompt_includes_guidelines():
     assert "Use bash for terminal operations" in prompt
     assert "Use web_search/web_fetch instead of curl/wget" in prompt
     assert "Kon session logs are JSONL files in ~/.kon/sessions" in prompt
+    assert prompt.count("# Tool usage") == 1
+    tool_usage = prompt.split("# Tool usage", 1)[1]
+    assert "  - Use read" not in tool_usage
+    assert "- Use read to view files" in tool_usage
 
 
 def test_system_prompt_includes_cwd():

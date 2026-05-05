@@ -17,6 +17,7 @@ class BaseTool[T: BaseModel](ABC):
     description: str
     mutating: bool = True
     tool_icon: str = "→"
+    prompt_guidelines: list[str] = []
 
     @abstractmethod
     async def execute(

@@ -35,6 +35,7 @@ class GrepTool(BaseTool):
     tool_icon = "*"
     params = GrepParams
     mutating = False
+    prompt_guidelines = ["Use grep to search file contents (NOT grep or rg via bash)"]
     description = (
         "Search file contents using ripgrep. "
         "Returns matching lines with file paths and line numbers, sorted by modification time. "

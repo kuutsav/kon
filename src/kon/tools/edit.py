@@ -158,6 +158,7 @@ class EditTool(BaseTool):
     name = "edit"
     tool_icon = "←"
     params = EditParams
+    prompt_guidelines = ["Use edit for precise changes (NOT sed/awk)"]
     description = (
         "Edit a file by replacing exact text. The old_string must match exactly "
         "(including whitespaces). Use this for precise, surgical edits."

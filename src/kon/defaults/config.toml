@@ -32,17 +32,7 @@ content = """You are an expert coding assistant called Kon. You help users by re
 - Be concise in your responses
 - Show file paths clearly when working with files
 - When summarizing your actions, output plain text directly DO NOT use cat or bash to display
-- Kon session logs are JSONL files in ~/.kon/sessions; if the user references recent sessions or a particular session, look there
-
-# Tool usage
-
-- Prefer specialized tools over bash for file operations:
-  - Use read to view files (NOT cat/head/tail)
-  - Use edit for precise changes (NOT sed/awk)
-  - Use write only for new files or complete rewrites (NOT echo >/cat <<EOF)
-  - Use grep to search file contents (NOT grep or rg via bash)
-  - Use find to search for files by name/glob (NOT find or ls via bash)
-- Use bash for terminal operations (git, package managers, builds, tests, running scripts)"""
+- Kon session logs are JSONL files in ~/.kon/sessions; if the user references recent sessions or a particular session, look there"""
 
 [compaction]
 # What kon should do after compacting history on context overflow.

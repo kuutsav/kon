@@ -344,6 +344,29 @@ def _migrate_v4_to_v5(data: dict[str, Any]) -> dict[str, Any]:
     return migrated
 
 
+def _migrate_v5_to_v6(data: dict[str, Any]) -> dict[str, Any]:
+    migrated = Config._apply_legacy_key_shims(data)
+    llm = migrated.get("llm")
+    if not isinstance(llm, dict):
+        llm = {}
+        migrated["llm"] = llm
+
+    system_prompt = llm.get("system_prompt")
+    if not isinstance(system_prompt, dict):
+        system_prompt = {}
+        llm["system_prompt"] = system_prompt
+
+    system_prompt["content"] = _DEFAULT_CONFIG_DATA["llm"]["system_prompt"]["content"]
+    system_prompt["git_context"] = _DEFAULT_CONFIG_DATA["llm"]["system_prompt"]["git_context"]
+
+    meta = migrated.get("meta")
+    if not isinstance(meta, dict):
+        migrated["meta"] = {"config_version": 6}
+    else:
+        meta["config_version"] = 6
+    return migrated
+
+
 def _migrate_config_data(data: dict[str, Any]) -> tuple[dict[str, Any], int, int, bool]:
     original = deepcopy(data)
     current_version = _get_config_version(original)
@@ -369,6 +392,10 @@ def _migrate_config_data(data: dict[str, Any]) -> tuple[dict[str, Any], int, int
         if current_version == 4:
             migrated = _migrate_v4_to_v5(migrated)
             current_version = 5
+            continue
+        if current_version == 5:
+            migrated = _migrate_v5_to_v6(migrated)
+            current_version = 6
             continue
         break
 

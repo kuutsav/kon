@@ -129,7 +129,9 @@ def _extract_markdown(html: str) -> str | None:
     summary_html = Document(doc_input).summary()
     if not summary_html or len(summary_html) < 50:
         return None
-    return convert(summary_html, _CONVERT_OPTIONS).content or None
+    result = convert(summary_html, _CONVERT_OPTIONS)
+    content = result["content"] if isinstance(result, dict) else result.content
+    return content or None
 
 
 class WebFetchParams(BaseModel):

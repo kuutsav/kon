@@ -239,3 +239,35 @@ def test_resolve_api_key_requires_key_for_remote_auto(monkeypatch: pytest.Monkey
 def test_resolve_api_key_uses_placeholder_for_none_mode(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     assert resolve_api_key(None, env_vars=("OPENAI_API_KEY",), auth_mode="none") == "kon-local"
+
+
+class TestEnvVarsForProvider:
+    def test_deepseek_provider_uses_deepseek_then_openai_key(self) -> None:
+        config = ProviderConfig(provider="deepseek", base_url="https://api.deepseek.com")
+        env_vars = OpenAICompletionsProvider._env_vars_for_provider(config)
+        assert env_vars == ("DEEPSEEK_API_KEY", "OPENAI_API_KEY")
+
+    def test_zai_provider_uses_zai_then_openai_key(self) -> None:
+        config = ProviderConfig(provider="zai", base_url="https://api.z.ai/api/coding/paas/v4")
+        env_vars = OpenAICompletionsProvider._env_vars_for_provider(config)
+        assert env_vars == ("ZAI_API_KEY", "OPENAI_API_KEY")
+
+    def test_zhipu_provider_uses_zai_then_openai_key(self) -> None:
+        config = ProviderConfig(provider="zhipu")
+        env_vars = OpenAICompletionsProvider._env_vars_for_provider(config)
+        assert env_vars == ("ZAI_API_KEY", "OPENAI_API_KEY")
+
+    def test_openai_provider_uses_only_openai_key(self) -> None:
+        config = ProviderConfig(provider="openai", base_url="https://api.openai.com/v1")
+        env_vars = OpenAICompletionsProvider._env_vars_for_provider(config)
+        assert env_vars == ("OPENAI_API_KEY",)
+
+    def test_deepseek_base_url_without_provider_uses_deepseek_then_openai_key(self) -> None:
+        config = ProviderConfig(base_url="https://api.deepseek.com/v1")
+        env_vars = OpenAICompletionsProvider._env_vars_for_provider(config)
+        assert env_vars == ("DEEPSEEK_API_KEY", "OPENAI_API_KEY")
+
+    def test_zai_base_url_without_provider_uses_zai_then_openai_key(self) -> None:
+        config = ProviderConfig(base_url="https://api.z.ai/api/coding/paas/v4")
+        env_vars = OpenAICompletionsProvider._env_vars_for_provider(config)
+        assert env_vars == ("ZAI_API_KEY", "OPENAI_API_KEY")

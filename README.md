@@ -64,7 +64,7 @@ kon
 
 ```text
 usage: kon [-h] [--model MODEL]
-           [--provider {azure-ai-foundry,github-copilot,openai,openai-codex,openai-responses,zhipu}]
+           [--provider {azure-ai-foundry,deepseek,github-copilot,openai,openai-codex,openai-responses,zhipu}]
            [--api-key API_KEY] [--base-url BASE_URL] [--continue]
            [--resume RESUME_SESSION] [--version]
            [--extra-tools EXTRA_TOOLS]
@@ -74,7 +74,7 @@ Kon TUI
 options:
   -h, --help            show this help message and exit
   --model, -m MODEL     Model to use
-  --provider, -p {azure-ai-foundry,github-copilot,openai,openai-codex,openai-responses,zhipu}
+  --provider, -p {azure-ai-foundry,deepseek,github-copilot,openai,openai-codex,openai-responses,zhipu}
                         Provider to use
   --api-key, -k API_KEY
                         API key
@@ -462,6 +462,7 @@ Built-in provider support includes:
 - **OpenAI Codex**
 - **OpenAI Responses / OpenAI-compatible endpoints**
 - **Azure AI Foundry**
+- **DeepSeek**
 - **ZhiPu**
 
 Use `/model` in the TUI to switch between available configured models.
@@ -473,12 +474,16 @@ Kon supports both OAuth login flows and direct API-key configuration.
 - **GitHub Copilot OAuth**: run `/login` and choose GitHub Copilot
 - **OpenAI OAuth**: run `/login` and choose OpenAI
 - **OpenAI-compatible providers**: use `OPENAI_API_KEY` or provider-specific equivalents
+  - OpenAI/default: `OPENAI_API_KEY` only
+  - DeepSeek: `DEEPSEEK_API_KEY` first, then `OPENAI_API_KEY`
+  - ZhiPu/ZAI: `ZAI_API_KEY` first, then `OPENAI_API_KEY`
 - **Azure AI Foundry**: set `AZURE_AI_FOUNDRY_API_KEY` and `AZURE_AI_FOUNDRY_BASE_URL`
 
 You can also pass credentials directly on launch:
 
 ```bash
 kon --provider openai --model some-model --api-key "$OPENAI_API_KEY"
+kon --provider deepseek --model deepseek-v4-flash
 ```
 
 ### Local models

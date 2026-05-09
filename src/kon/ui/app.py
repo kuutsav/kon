@@ -1105,7 +1105,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             )
 
             # Start tool block
-            tool_block = chat.start_tool("bash", "shell", f"$ {command}")
+            tool_block = chat.start_tool("bash", "shell", f"$ {command}", icon="$")
 
             # Display the result
             if result.success:

@@ -82,7 +82,7 @@ def test_permissions_command_in_default_commands():
     permissions_cmd = next((cmd for cmd in DEFAULT_COMMANDS if cmd.name == "permissions"), None)
 
     assert permissions_cmd is not None
-    assert permissions_cmd.description == "Change permission mode"
+    assert permissions_cmd.description == "change permission mode"
     assert isinstance(permissions_cmd, SlashCommand)
 
 

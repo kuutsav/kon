@@ -366,7 +366,7 @@ class QueueDisplay(Vertical):
         result = Text()
         result.append("Queue", style="bold " + dim_color)
         for text, is_steer in ordered:
-            prefix = " ↳ "
+            prefix = " L "
             steer_prefix = "[steer] " if is_steer else ""
             available = max(0, content_width - len(prefix) - len(steer_prefix))
             truncated = self._truncate_text(text, available)

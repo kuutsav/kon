@@ -13,7 +13,7 @@ from kon.core.types import (
     Usage,
     UserMessage,
 )
-from kon.llm.providers import MockProvider
+from kon.llm.providers.mock import MockProvider
 from kon.loop import Agent, AgentConfig
 from kon.runtime import ConversationRuntime
 from kon.session import CompactionEntry, Session

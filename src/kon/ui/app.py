@@ -47,11 +47,11 @@ from ..events import (
     TurnStartEvent,
     WarningEvent,
 )
-from ..llm import PROVIDER_API_BY_NAME, ApiType, BaseProvider, ProviderConfig
+from ..llm import PROVIDER_API_BY_NAME, BaseProvider
 from ..llm.base import AuthMode
 from ..notify import NotificationEvent, notify
 from ..permissions import ApprovalResponse
-from ..runtime import ConversationRuntime, create_provider, get_provider_api_type
+from ..runtime import ConversationRuntime
 from ..session import Session
 from ..tools import DEFAULT_TOOLS, EXTRA_TOOLS, get_tool, get_tools
 from ..tools.bash import BashParams, BashTool
@@ -312,12 +312,6 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         if query.strip():
             parts.extend(["", "[query]", query.strip()])
         return "\n".join(parts)
-
-    def _create_provider(self, api_type: ApiType, config: ProviderConfig) -> BaseProvider:
-        return create_provider(api_type, config)
-
-    def _get_provider_api_type(self, provider: BaseProvider) -> ApiType:
-        return get_provider_api_type(provider)
 
     def _sync_runtime_state(self) -> None:
         # Compatibility hook for mixin/unit-test fakes. Runtime is the source of truth.

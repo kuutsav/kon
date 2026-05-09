@@ -2,6 +2,7 @@ from kon.core.types import Message, ToolDefinition
 from kon.llm.base import BaseProvider, LLMStream, ProviderConfig
 from kon.llm.models import ApiType, get_model
 from kon.runtime import ConversationRuntime
+from kon.session import Session
 
 
 class _FakeProvider(BaseProvider):
@@ -90,3 +91,123 @@ def test_switch_model_reuses_provider_when_openai_compatible_base_url_is_unchang
     assert provider.config.provider == "deepseek"
     assert provider.config.base_url == "https://api.deepseek.com"
     assert provider.config.model == "deepseek-v4-flash"
+
+
+def test_switch_model_creates_provider_when_provider_is_none(monkeypatch):
+    runtime = ConversationRuntime(
+        cwd="/test/project",
+        model="glm-4.7",
+        model_provider="zhipu",
+        api_key="test-key",
+        base_url=None,
+        thinking_level="high",
+        tools=[],
+    )
+    assert runtime.provider is None
+
+    target = get_model("deepseek-v4-flash", "deepseek")
+    assert target is not None
+
+    created: list[ProviderConfig] = []
+
+    def fake_create_provider(api_type: ApiType, config: ProviderConfig) -> BaseProvider:
+        assert api_type == ApiType.OPENAI_COMPLETIONS
+        created.append(config)
+        return _FakeProvider(config)
+
+    monkeypatch.setattr("kon.runtime.create_provider", fake_create_provider)
+
+    runtime.switch_model(target)
+
+    assert len(created) == 1
+    assert runtime.provider is not None
+    assert runtime.provider.config.model == "deepseek-v4-flash"
+    assert runtime.provider.config.provider == "deepseek"
+    assert runtime.model == "deepseek-v4-flash"
+    assert runtime.model_provider == "deepseek"
+
+
+def test_load_session_reuses_existing_provider_for_unknown_session_provider(tmp_path, monkeypatch):
+    monkeypatch.setattr("kon.session.Session.get_sessions_dir", lambda cwd: tmp_path)
+
+    saved = Session.create(
+        "/test/project",
+        provider="custom-unknown",
+        model_id="custom-unknown-model",
+        thinking_level="high",
+        system_prompt="prompt",
+    )
+    saved.append_model_change("custom-unknown", "custom-unknown-model", None)
+    assert saved.session_file is not None
+    saved.ensure_persisted()
+
+    initial_provider = _FakeProvider(
+        ProviderConfig(
+            provider="custom-unknown",
+            base_url="https://example.invalid",
+            model="custom-unknown-model",
+        )
+    )
+    runtime = _runtime_with_provider(initial_provider)
+
+    def fail_create_provider(api_type: ApiType, config: ProviderConfig) -> BaseProvider:
+        raise AssertionError("provider should not be recreated")
+
+    monkeypatch.setattr("kon.runtime.create_provider", fail_create_provider)
+
+    loaded = runtime.load_session(saved.session_file)
+
+    assert loaded.id == saved.id
+    assert runtime.provider is initial_provider
+    assert runtime.model == "custom-unknown-model"
+    assert runtime.model_provider == "custom-unknown"
+
+
+def test_load_session_reuses_provider_when_runtime_provider_unknown_and_apis_match(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr("kon.session.Session.get_sessions_dir", lambda cwd: tmp_path)
+
+    target = get_model("deepseek-v4-flash", "deepseek")
+    assert target is not None
+    assert target.api == ApiType.OPENAI_COMPLETIONS
+
+    saved = Session.create(
+        "/test/project",
+        provider=target.provider,
+        model_id=target.id,
+        thinking_level="high",
+        system_prompt="prompt",
+    )
+    saved.append_model_change(target.provider, target.id, None)
+    assert saved.session_file is not None
+    saved.ensure_persisted()
+
+    runtime = ConversationRuntime(
+        cwd="/test/project",
+        model="custom-unknown-model",
+        model_provider="custom-unknown",
+        api_key="test-key",
+        base_url=None,
+        thinking_level="high",
+        tools=[],
+    )
+    initial_provider = _FakeProvider(
+        ProviderConfig(
+            provider="custom-unknown",
+            base_url="https://example.invalid",
+            model="custom-unknown-model",
+        )
+    )
+    runtime.provider = initial_provider
+
+    def fail_create_provider(api_type: ApiType, config: ProviderConfig) -> BaseProvider:
+        raise AssertionError("provider should not be recreated")
+
+    monkeypatch.setattr("kon.runtime.create_provider", fail_create_provider)
+
+    runtime.load_session(saved.session_file)
+
+    assert runtime.provider is initial_provider
+    assert runtime.model == target.id
+    assert runtime.model_provider == target.provider

@@ -24,7 +24,7 @@ from kon.events import (
     TurnStartEvent,
     WarningEvent,
 )
-from kon.llm.providers import MockProvider
+from kon.llm.providers.mock import MockProvider
 from kon.loop import Agent
 from kon.session import Session
 from kon.tools import BashTool, ReadTool

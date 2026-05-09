@@ -86,6 +86,10 @@ def clear_credentials() -> None:
         path.unlink()
 
 
+def is_copilot_logged_in() -> bool:
+    return load_credentials() is not None
+
+
 def _get_urls(domain: str) -> dict[str, str]:
     return {
         "device_code": f"https://{domain}/login/device/code",

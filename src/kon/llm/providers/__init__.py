@@ -1,22 +1,5 @@
 from ..base import BaseProvider
 from ..models import ApiType
-from .azure_ai_foundry import AzureAIFoundryProvider
-from .copilot import CopilotProvider, CopilotResponsesProvider, is_copilot_logged_in
-from .copilot_anthropic import CopilotAnthropicProvider
-from .mock import MockProvider
-from .openai_codex_responses import OpenAICodexResponsesProvider, is_openai_logged_in
-from .openai_completions import OpenAICompletionsProvider
-from .openai_responses import OpenAIResponsesProvider
-
-API_TYPE_TO_PROVIDER_CLASS: dict[ApiType, type[BaseProvider]] = {
-    ApiType.GITHUB_COPILOT: CopilotProvider,
-    ApiType.GITHUB_COPILOT_RESPONSES: CopilotResponsesProvider,
-    ApiType.OPENAI_RESPONSES: OpenAIResponsesProvider,
-    ApiType.OPENAI_CODEX_RESPONSES: OpenAICodexResponsesProvider,
-    ApiType.ANTHROPIC_COPILOT: CopilotAnthropicProvider,
-    ApiType.AZURE_AI_FOUNDRY: AzureAIFoundryProvider,
-    ApiType.OPENAI_COMPLETIONS: OpenAICompletionsProvider,
-}
 
 PROVIDER_API_BY_NAME: dict[str, ApiType] = {
     "openai": ApiType.OPENAI_COMPLETIONS,
@@ -41,18 +24,38 @@ def resolve_provider_api_type(provider: str | None) -> ApiType:
     return api_type
 
 
-__all__ = [
-    "API_TYPE_TO_PROVIDER_CLASS",
-    "PROVIDER_API_BY_NAME",
-    "AzureAIFoundryProvider",
-    "CopilotAnthropicProvider",
-    "CopilotProvider",
-    "CopilotResponsesProvider",
-    "MockProvider",
-    "OpenAICodexResponsesProvider",
-    "OpenAICompletionsProvider",
-    "OpenAIResponsesProvider",
-    "is_copilot_logged_in",
-    "is_openai_logged_in",
-    "resolve_provider_api_type",
-]
+def get_provider_class(api_type: ApiType) -> type[BaseProvider]:
+    match api_type:
+        case ApiType.GITHUB_COPILOT:
+            from .copilot import CopilotProvider
+
+            return CopilotProvider
+        case ApiType.GITHUB_COPILOT_RESPONSES:
+            from .copilot import CopilotResponsesProvider
+
+            return CopilotResponsesProvider
+        case ApiType.OPENAI_RESPONSES:
+            from .openai_responses import OpenAIResponsesProvider
+
+            return OpenAIResponsesProvider
+        case ApiType.OPENAI_CODEX_RESPONSES:
+            from .openai_codex_responses import OpenAICodexResponsesProvider
+
+            return OpenAICodexResponsesProvider
+        case ApiType.ANTHROPIC_COPILOT:
+            from .copilot_anthropic import CopilotAnthropicProvider
+
+            return CopilotAnthropicProvider
+        case ApiType.AZURE_AI_FOUNDRY:
+            from .azure_ai_foundry import AzureAIFoundryProvider
+
+            return AzureAIFoundryProvider
+        case ApiType.OPENAI_COMPLETIONS:
+            from .openai_completions import OpenAICompletionsProvider
+
+            return OpenAICompletionsProvider
+
+    raise ValueError(f"Unsupported API type: {api_type.value}")
+
+
+__all__ = ["PROVIDER_API_BY_NAME", "get_provider_class", "resolve_provider_api_type"]

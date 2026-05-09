@@ -5,6 +5,7 @@ from .copilot import (
     get_base_url_from_token,
     get_copilot_auth_path,
     get_valid_token,
+    is_copilot_logged_in,
     load_credentials,
     login,
 )
@@ -29,6 +30,7 @@ __all__ = [
     "get_openai_auth_path",
     "get_valid_openai_token",
     "get_valid_token",
+    "is_copilot_logged_in",
     "is_openai_logged_in",
     "load_credentials",
     "load_openai_credentials",

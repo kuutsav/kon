@@ -8,13 +8,13 @@ from .core.compaction import generate_summary
 from .core.handoff import generate_handoff_prompt
 from .core.types import AssistantMessage
 from .llm import (
-    API_TYPE_TO_PROVIDER_CLASS,
     ApiType,
     BaseProvider,
     Model,
     ProviderConfig,
     get_max_tokens,
     get_model,
+    get_provider_class,
     is_copilot_logged_in,
     is_openai_logged_in,
     resolve_provider_api_type,
@@ -28,9 +28,6 @@ _COPILOT_API_TYPES: frozenset[ApiType] = frozenset(
     {ApiType.GITHUB_COPILOT, ApiType.GITHUB_COPILOT_RESPONSES, ApiType.ANTHROPIC_COPILOT}
 )
 _OPENAI_OAUTH_API_TYPES: frozenset[ApiType] = frozenset({ApiType.OPENAI_CODEX_RESPONSES})
-_API_TYPE_BY_PROVIDER: dict[type[BaseProvider], ApiType] = {
-    v: k for k, v in API_TYPE_TO_PROVIDER_CLASS.items()
-}
 
 
 def default_base_url_for_api(api_type: ApiType) -> str | None:
@@ -44,14 +41,7 @@ def create_provider(api_type: ApiType, config: ProviderConfig) -> BaseProvider:
         raise ValueError("Not logged in to GitHub Copilot. Use /login to authenticate.")
     if api_type in _OPENAI_OAUTH_API_TYPES and not is_openai_logged_in():
         raise ValueError("Not logged in to OpenAI. Use /login to authenticate.")
-    cls = API_TYPE_TO_PROVIDER_CLASS.get(api_type)
-    if cls is None:
-        raise ValueError(f"Unsupported API type: {api_type.value}")
-    return cls(config)
-
-
-def get_provider_api_type(provider: BaseProvider) -> ApiType:
-    return _API_TYPE_BY_PROVIDER.get(type(provider), ApiType.OPENAI_COMPLETIONS)
+    return get_provider_class(api_type)(config)
 
 
 @dataclass
@@ -232,6 +222,16 @@ class ConversationRuntime:
         if self.provider and self.session:
             self.provider.config.session_id = self.session.id
 
+    def _current_provider_api_type(self) -> ApiType | None:
+        if self.provider is None:
+            return None
+        if (model_info := get_model(self.model, self.model_provider)) is not None:
+            return model_info.api
+        try:
+            return resolve_provider_api_type(self.model_provider)
+        except ValueError:
+            return ApiType.OPENAI_COMPLETIONS
+
     def create_session(self) -> Session:
         selected_model = get_model(self.model, self.model_provider)
         model_provider = (
@@ -268,7 +268,7 @@ class ConversationRuntime:
         return session
 
     def switch_model(self, model: Model) -> None:
-        current_api_type = get_provider_api_type(self.provider) if self.provider else None
+        current_api_type = self._current_provider_api_type()
         current_provider = (
             self.provider.config.provider or self.model_provider
             if self.provider
@@ -330,19 +330,8 @@ class ConversationRuntime:
             )
 
             if restored_model:
-                current_api_type = get_provider_api_type(provider) if provider else None
-                if restored_model.api != current_api_type:
-                    provider_config = self._provider_config(
-                        model=model,
-                        provider=model_provider,
-                        base_url=restored_base_url,
-                        thinking_level=thinking_level,
-                        session_id=session.id,
-                    )
-                    provider = create_provider(restored_model.api, provider_config)
-                elif provider:
-                    pass
-                else:
+                current_api_type = self._current_provider_api_type()
+                if provider is None or restored_model.api != current_api_type:
                     provider_config = self._provider_config(
                         model=model,
                         provider=model_provider,

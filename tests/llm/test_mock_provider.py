@@ -3,7 +3,7 @@
 import pytest
 
 from kon.core.types import StreamDone, TextPart, ThinkPart, ToolCallDelta, ToolCallStart
-from kon.llm.providers import MockProvider
+from kon.llm.providers.mock import MockProvider
 
 
 @pytest.mark.asyncio

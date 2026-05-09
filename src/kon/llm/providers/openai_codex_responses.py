@@ -448,7 +448,3 @@ class OpenAICodexResponsesProvider(BaseProvider):
     def should_retry_for_error(self, error: Exception) -> bool:
         msg = str(error).lower()
         return any(kw in msg for kw in ("429", "rate_limit", "server_error", "502", "503", "504"))
-
-
-def is_openai_logged_in() -> bool:
-    return load_openai_credentials() is not None

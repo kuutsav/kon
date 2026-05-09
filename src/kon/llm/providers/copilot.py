@@ -142,7 +142,3 @@ class CopilotResponsesProvider(OpenAIResponsesProvider):
             temperature=temperature,
             max_tokens=max_tokens,
         )
-
-
-def is_copilot_logged_in() -> bool:
-    return load_credentials() is not None

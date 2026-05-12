@@ -11,6 +11,10 @@
 - Use `uv run python -m pytest` for testing in general; after edits/writes
 - If the user asks for e2e tests then run the kon-tmux e2e test if available
 
+## Skills
+
+- Kon supports registering a skill as a slash command by setting `register_cmd: true` in the SKILL.md frontmatter. If a user asks for a "registered" skill, include this field.
+
 ## Committing code
 
 - If the user tells you to commit code, look at all the changes and create multile commits if needed bsaed on logical groupings

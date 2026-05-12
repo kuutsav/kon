@@ -118,6 +118,7 @@ class SessionInfo(BaseModel):
     modified: datetime
     message_count: int
     first_message: str
+    parent_session_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -733,6 +734,7 @@ class Session:
         header: SessionHeader | None = None
         message_count = 0
         first_message = ""
+        parent_session_id: str | None = None
 
         with open(path, encoding="utf-8") as f:
             for line in f:
@@ -745,9 +747,10 @@ class Session:
                 except json.JSONDecodeError:
                     continue
 
-                if data.get("type") == "header":
+                entry_type = data.get("type")
+                if entry_type == "header":
                     header = SessionHeader.model_validate(data)
-                elif data.get("type") == "message":
+                elif entry_type == "message":
                     message_count += 1
                     msg = data.get("message", {})
                     if msg.get("role") == "user" and not first_message:
@@ -760,6 +763,12 @@ class Session:
                                 first_message = cls._extract_preview_from_user_message(
                                     first_item.get("text", "")
                                 )[:100]
+                elif (
+                    entry_type == "custom_message"
+                    and data.get("custom_type") == "handoff_backlink"
+                ):
+                    details = data.get("details") or {}
+                    parent_session_id = details.get("target_session_id")
 
         if not header:
             return None
@@ -773,6 +782,7 @@ class Session:
             modified=datetime.fromtimestamp(stat.st_mtime, tz=UTC),
             message_count=message_count,
             first_message=first_message or "(no messages)",
+            parent_session_id=parent_session_id,
         )
 
     @classmethod

@@ -11,6 +11,7 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 
 from kon import config
+from kon.ui.tool_output import truncate_tool_output_text
 
 from ..core.types import ToolResult
 from .base import BaseTool
@@ -131,6 +132,9 @@ class BashTool(BaseTool):
     name = "bash"
     tool_icon = "$"
     params = BashParams
+    prompt_guidelines = (
+        "Use bash for terminal operations (git, package managers, builds, tests, running scripts)",
+    )
     description = (
         "Execute a bash command in the current working directory. "
         f"Output truncated to last {MAX_OUTPUT_LINES} lines or {MAX_OUTPUT_BYTES // 1024}KB. "
@@ -152,38 +156,39 @@ class BashTool(BaseTool):
     def format_call(self, params: BashParams) -> str:
         return params.command
 
-    def _format_display(self, output: str, max_lines: int = 5, max_line_chars: int = 500) -> str:
+    def _format_display(
+        self, output: str, max_lines: int = 5, max_line_chars: int = 500
+    ) -> tuple[str, str | None]:
         truncation_color = config.ui.colors.dim
 
         if not output:
-            return f"[{truncation_color}](no output)[/{truncation_color}]"
+            return f"[{truncation_color}](no output)[/{truncation_color}]", None
 
         lines = [line for line in output.split("\n") if line != ""]
         if not lines:
-            return f"[{truncation_color}](no output)[/{truncation_color}]"
+            return f"[{truncation_color}](no output)[/{truncation_color}]", None
 
-        display_lines = lines[:max_lines]
-        hidden_lines = max(0, len(lines) - len(display_lines))
-
-        formatted: list[str] = []
-        for line in display_lines:
+        full_formatted: list[str] = []
+        char_truncated = False
+        for line in lines:
             if len(line) > max_line_chars:
                 visible = line[:max_line_chars].replace("[", "\\[")
                 hidden_chars = len(line) - max_line_chars
-                formatted.append(
+                char_truncated = True
+                full_formatted.append(
                     f"[dim]{visible}[/dim]"
                     f"[{truncation_color}]... ({hidden_chars} more chars)[/{truncation_color}]"
                 )
             else:
                 escaped = line.replace("[", "\\[")
-                formatted.append(f"[dim]{escaped}[/dim]")
+                full_formatted.append(f"[dim]{escaped}[/dim]")
 
-        if hidden_lines > 0:
-            formatted.append(
-                f"[{truncation_color}]({hidden_lines} more lines)[/{truncation_color}]"
-            )
-
-        return "\n".join(formatted)
+        full_display = "\n".join(full_formatted)
+        collapsed_display, line_truncated = truncate_tool_output_text(
+            full_display, max_lines=max_lines, escape_lines=False
+        )
+        expanded_display = full_display if line_truncated or char_truncated else None
+        return collapsed_display, expanded_display
 
     async def execute(
         self,
@@ -307,7 +312,9 @@ class BashTool(BaseTool):
             result_text = trunc.content or "(no output)"
 
             display_max = sys.maxsize if inline_output else 5
-            display_text = self._format_display(trunc.content, max_lines=display_max)
+            display_text, display_text_full = self._format_display(
+                trunc.content, max_lines=display_max
+            )
 
             non_empty_lines = [line for line in (trunc.content or "").split("\n") if line.strip()]
             is_single_line = len(non_empty_lines) <= 1
@@ -316,13 +323,19 @@ class BashTool(BaseTool):
                 if is_single_line:
                     summary_line = display_text.replace("\n", " ").strip()
                     return ToolResult(success=True, result=result_text, ui_summary=summary_line)
-                return ToolResult(success=True, result=result_text, ui_details=display_text)
+                return ToolResult(
+                    success=True,
+                    result=result_text,
+                    ui_details=display_text,
+                    ui_details_full=display_text_full,
+                )
             else:
                 return ToolResult(
                     success=False,
                     result=result_text,
                     ui_summary=f"[red]Exit code {proc.returncode}[/red]",
                     ui_details=display_text,
+                    ui_details_full=display_text_full,
                 )
 
         except Exception as e:

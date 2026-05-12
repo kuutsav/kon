@@ -205,6 +205,7 @@ async def _execute_tool(
             content=content,
             ui_summary=result.ui_summary,
             ui_details=result.ui_details,
+            ui_details_full=result.ui_details_full,
             is_error=not result.success,
             file_changes=result.file_changes,
         ), result.file_changes

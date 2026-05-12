@@ -6,6 +6,7 @@ from collections.abc import Callable
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, ClassVar
 
+from rich.style import Style
 from textual import events
 from textual._ansi_sequences import ANSI_SEQUENCES_KEYS
 from textual.app import ComposeResult
@@ -13,6 +14,9 @@ from textual.binding import Binding
 from textual.containers import Vertical
 from textual.message import Message
 from textual.widgets import TextArea
+from textual.widgets.text_area import TextAreaTheme
+
+from kon import config
 
 from .autocomplete import (
     DEFAULT_COMMANDS,
@@ -39,6 +43,16 @@ _PASTE_CHAR_THRESHOLD = 500
 _PASTE_MARKER_RE = re.compile(r"\[paste #(\d+)(?: (\+\d+ lines|\d+ chars))?\]")
 _SKILL_TRIGGER_MARKER = "\u2063"
 _SHELL_COMMAND_CLASS = "-shell-command"
+_TEXTAREA_THEME = "kon-input"
+
+
+def _get_textarea_theme() -> TextAreaTheme:
+    colors = config.ui.colors
+    return TextAreaTheme(
+        name=_TEXTAREA_THEME,
+        base_style=Style(color=colors.fg),
+        cursor_style=Style(color=colors.bg, bgcolor=colors.fg),
+    )
 
 
 class Kon(TextArea):
@@ -176,9 +190,16 @@ class InputBox(Vertical):
 
     def on_mount(self) -> None:
         textarea = self.query_one("#input-textarea", TextArea)
+        textarea.register_theme(_get_textarea_theme())
+        textarea.theme = _TEXTAREA_THEME
         textarea.cursor_blink = False
         textarea.show_line_numbers = False
         textarea.highlight_cursor_line = False
+
+    def refresh_theme(self) -> None:
+        textarea = self.query_one("#input-textarea", TextArea)
+        textarea.register_theme(_get_textarea_theme())
+        textarea.theme = _TEXTAREA_THEME
 
     def on_kon_scroll_info(self, event: Kon.ScrollInfo) -> None:
         event.stop()

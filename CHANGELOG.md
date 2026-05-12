@@ -6,6 +6,37 @@ All notable changes to this project will be documented in this file.
 
 - No changes yet.
 
+## 0.3.8 - 2026-05-08
+
+### Added
+
+- Added DeepSeek provider support - @Kreijstal.
+- Added Codex websocket streaming with SSE fallback.
+- Added expandable tool output.
+- Added session handoff tree display in the resume list.
+- Added config migration v5→v6 to replace legacy system prompts with the current default.
+- Added dynamic tool guidelines in the system prompt via `prompt_guidelines` on `BaseTool`.
+
+### Changed
+
+- Deduplicated tool prompt guidelines in the system prompt.
+- Simplified prefix formatting in the session tree display.
+- Added skills registration guidance to `AGENTS.md`.
+- Removed old architectural review docs.
+- Adjusted info bar pause icon spacing.
+
+### Fixed
+
+- Fixed provider-specific OpenAI-compatible API key selection.
+- Patched vulnerable dependencies - @Meltedd.
+- Restored web fetch extraction compatibility with `html-to-markdown` 3.3.
+- Handled `html-to-markdown` dict return types and raised the minimum supported version.
+- Fixed info bar git branch refreshing.
+- Marked GLM-5.1 as supporting native vision.
+- Hardened `web_fetch` against SSRF - @Meltedd.
+- Enforced output caps on shell-mode bash - @Meltedd.
+- Used themed notice color for launch warning block borders.
+
 ## 0.3.7 - 2026-05-02
 
 ### Added

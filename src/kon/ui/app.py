@@ -85,9 +85,10 @@ _CHANGELOG_URL = "https://github.com/0xku/kon/blob/main/CHANGELOG.md"
 try:
     VERSION = version(_PYPI_PACKAGE_NAME)
 except PackageNotFoundError:
-    VERSION = "0.3.7"
+    VERSION = "0.3.8"
 
 _NOTIFY_EVENTS = (AgentEndEvent, ToolApprovalEvent)
+_GIT_BRANCH_REFRESH_INTERVAL_SECONDS = 1.0
 
 
 class Kon(CommandsMixin, SessionUIMixin, App[None]):
@@ -101,6 +102,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         Binding("ctrl+d", "handle_ctrl_d", "Delete session", priority=True),
         ("escape", "interrupt_agent", "Interrupt"),
         ("ctrl+t", "toggle_thinking", "Toggle thinking"),
+        Binding("ctrl+o", "toggle_tool_output", "Toggle tool output", priority=True),
         Binding("ctrl+shift+t", "cycle_thinking_level", "Cycle thinking level", priority=True),
         Binding("shift+tab", "cycle_permission_mode", "Cycle permission mode", priority=True),
     ]
@@ -226,6 +228,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
     def _apply_theme(self, theme_id: str) -> None:
         type(self).CSS = get_styles()
         self.refresh_css(animate=False)
+        self.query_one("#input-box", InputBox).refresh_theme()
         self._apply_thinking_level_style(self._runtime.thinking_level)
 
     @property
@@ -365,7 +368,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                 context_paths=[
                     format_path(f.path) for f in self._runtime.agent.context.agents_files
                 ],
-                skill_paths=[format_path(s.path) for s in self._runtime.agent.context.skills],
+                skills=self._runtime.agent.context.skills,
+                tools=self._runtime.tools,
             )
             for path, message in self._runtime.agent.context.skill_warnings:
                 self._add_launch_warning(f"Skill warning in {format_path(path)}: {message}")
@@ -400,6 +404,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             info_bar.set_file_changes(self._runtime.session.file_changes_summary())
             chat.add_info_message("Resumed session")
 
+        self.set_interval(_GIT_BRANCH_REFRESH_INTERVAL_SECONDS, self._refresh_git_branch)
+
         self._startup_complete = True
         self._show_pending_update_notice_if_idle()
         input_box.focus()
@@ -407,6 +413,10 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         import gc
 
         gc.freeze()
+
+    def _refresh_git_branch(self) -> None:
+        info_bar = self.query_one("#info-bar", InfoBar)
+        info_bar.refresh_git_branch()
 
     async def _collect_file_paths(self) -> None:
         """Collect file paths using glob (fallback when fd is unavailable)."""
@@ -655,6 +665,12 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
         status = self.query_one("#status-line", StatusLine)
         status.hide_exit_hint()
+
+    def action_toggle_tool_output(self) -> None:
+        chat = self.query_one("#chat-log", ChatLog)
+        expanded = chat.toggle_tool_output_expanded()
+        status = "expanded" if expanded else "collapsed"
+        chat.show_status(f"Tool output {status}")
 
     def action_toggle_thinking(self) -> None:
         self._hide_thinking = not self._hide_thinking
@@ -935,12 +951,17 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                                 markup = True
                                 ui_summary = r.ui_summary
                                 ui_details = r.ui_details
+                                ui_details_full = r.ui_details_full
                                 if ui_summary is None and ui_details is None and r.content:
-                                    ui_details = self._format_tool_result_text(r)
-                                    markup = False
+                                    ui_details, ui_details_full = self._format_tool_result_text(r)
                                 success = not r.is_error
                                 chat.set_tool_result(
-                                    id, ui_summary, ui_details, success, markup=markup
+                                    id,
+                                    ui_summary,
+                                    ui_details,
+                                    success,
+                                    markup=markup,
+                                    ui_details_full=ui_details_full,
                                 )
                             if fc:
                                 info_bar.update_file_changes(fc.path, fc.added, fc.removed)
@@ -1085,7 +1106,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             )
 
             # Start tool block
-            tool_block = chat.start_tool("bash", "shell", f"$ {command}")
+            tool_block = chat.start_tool("bash", "shell", f"$ {command}", icon="$")
 
             # Display the result
             if result.success:
@@ -1125,7 +1146,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             status.set_status("idle")
 
 
-_LOGO = ["█ K █", "█ O █", "█ N █"]
+_LOGO = ["░█░█░█▀█░█▀█", "░█▀▄░█░█░█░█", "░▀░▀░▀▀▀░▀░▀"]
 
 
 def _format_duration(seconds: float) -> str:

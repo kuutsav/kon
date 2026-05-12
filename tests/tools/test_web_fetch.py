@@ -29,6 +29,50 @@ def test_public_ip_policy(ip, expected):
     assert web_fetch._is_public_ip(ip) is expected
 
 
+def test_extract_markdown_falls_back_for_link_index_pages(monkeypatch):
+    def empty_summary(self):
+        return "<html><body></body></html>"
+
+    monkeypatch.setattr(web_fetch.Document, "summary", empty_summary)
+    content = web_fetch._extract_markdown(
+        """
+        <html><body>
+          <table><tr><td>
+            <a href="https://example.com/one">First link item with enough text</a>
+            <p>Additional visible text that should survive fallback extraction.</p>
+          </td></tr></table>
+          <script>alert('hidden')</script><img src="data:image/svg+xml;base64,noise" alt="noise">
+        </body></html>
+        """
+    )
+
+    assert content is not None
+    assert "[First link item with enough text](https://example.com/one)" in content
+    assert "Additional visible text" in content
+    assert "alert" not in content
+    assert "data:image" not in content
+
+
+def test_extract_markdown_falls_back_when_readability_markdown_is_empty(monkeypatch):
+    def broken_summary(self):
+        return "<html><body><div><tr><td>broken table fragment</td></tr></div></body></html>"
+
+    monkeypatch.setattr(web_fetch.Document, "summary", broken_summary)
+    content = web_fetch._extract_markdown(
+        """
+        <html><body><article>
+          <table><tr><th>Release</th><th>Date</th></tr>
+          <tr><td>7.0.3 stable kernel release</td><td>2026-04-30</td></tr></table>
+          <p>Linux kernel archive content should be used by fallback.</p>
+        </article></body></html>
+        """
+    )
+
+    assert content is not None
+    assert "7.0.3 stable kernel release" in content
+    assert "Linux kernel archive content" in content
+
+
 @pytest.mark.asyncio
 async def test_web_fetch_refuses_direct_loopback_before_fetch(monkeypatch):
     monkeypatch.setattr(web_fetch, "AsyncSession", _fail_session)

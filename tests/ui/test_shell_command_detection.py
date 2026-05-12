@@ -116,7 +116,7 @@ async def test_execute_shell_command_basic():
     mock_status.set_status.assert_called_with("idle")
 
     # Verify chat methods were called
-    mock_chat.start_tool.assert_called_once_with("bash", "shell", "$ ls -la")
+    mock_chat.start_tool.assert_called_once_with("bash", "shell", "$ ls -la", icon="$")
 
     # Verify tool block result was set
     tool_block = mock_chat.start_tool.return_value

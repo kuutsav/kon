@@ -1,5 +1,9 @@
-<h1 align="center">Kon</h1>
-<p align="center">A minimal terminal coding agent with a small core, strong defaults, and user-owned context.</p>
+<pre align="center">
+░█░█░█▀█░█▀█
+░█▀▄░█░█░█░█
+░▀░▀░▀▀▀░▀░▀
+</pre>
+<p align="center">Minimal coding agent harness</p>
 <p align="center">
   <a href="https://pypi.org/project/kon-coding-agent/"><img alt="PyPI" src="https://img.shields.io/pypi/v/kon-coding-agent?style=flat-square" /></a>
   <a href="https://www.python.org/downloads/release/python-3120/"><img alt="Python" src="https://img.shields.io/badge/python-3.12%2B-blue?style=flat-square" /></a>
@@ -7,7 +11,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/images/kon-screenshot.png" alt="Kon terminal UI screenshot" width="490" />
+  <img src="docs/images/kon-screenshot.png" alt="Kon terminal UI screenshot" width="700" />
 </p>
 
 Kon is a minimal coding agent focused on a tiny core prompt, a small built-in toolset, and project-specific context layered on top only when you want it. The default system prompt stays **under 270 tokens**, and even including the built-in tool descriptions and parameter schemas, the fixed harness stays at about **~1,000 tokens**. The core experience is built around just **6 default tools** plus **2 optional web tools**.
@@ -64,7 +68,7 @@ kon
 
 ```text
 usage: kon [-h] [--model MODEL]
-           [--provider {azure-ai-foundry,github-copilot,openai,openai-codex,openai-responses,zhipu}]
+           [--provider {azure-ai-foundry,deepseek,github-copilot,openai,openai-codex,openai-responses,zhipu}]
            [--api-key API_KEY] [--base-url BASE_URL] [--continue]
            [--resume RESUME_SESSION] [--version]
            [--extra-tools EXTRA_TOOLS]
@@ -74,7 +78,7 @@ Kon TUI
 options:
   -h, --help            show this help message and exit
   --model, -m MODEL     Model to use
-  --provider, -p {azure-ai-foundry,github-copilot,openai,openai-codex,openai-responses,zhipu}
+  --provider, -p {azure-ai-foundry,deepseek,github-copilot,openai,openai-codex,openai-responses,zhipu}
                         Provider to use
   --api-key, -k API_KEY
                         API key
@@ -462,6 +466,7 @@ Built-in provider support includes:
 - **OpenAI Codex**
 - **OpenAI Responses / OpenAI-compatible endpoints**
 - **Azure AI Foundry**
+- **DeepSeek**
 - **ZhiPu**
 
 Use `/model` in the TUI to switch between available configured models.
@@ -473,12 +478,16 @@ Kon supports both OAuth login flows and direct API-key configuration.
 - **GitHub Copilot OAuth**: run `/login` and choose GitHub Copilot
 - **OpenAI OAuth**: run `/login` and choose OpenAI
 - **OpenAI-compatible providers**: use `OPENAI_API_KEY` or provider-specific equivalents
+  - OpenAI/default: `OPENAI_API_KEY` only
+  - DeepSeek: `DEEPSEEK_API_KEY` first, then `OPENAI_API_KEY`
+  - ZhiPu/ZAI: `ZAI_API_KEY` first, then `OPENAI_API_KEY`
 - **Azure AI Foundry**: set `AZURE_AI_FOUNDRY_API_KEY` and `AZURE_AI_FOUNDRY_BASE_URL`
 
 You can also pass credentials directly on launch:
 
 ```bash
 kon --provider openai --model some-model --api-key "$OPENAI_API_KEY"
+kon --provider deepseek --model deepseek-v4-flash
 ```
 
 ### Local models

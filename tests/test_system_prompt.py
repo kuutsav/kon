@@ -1,12 +1,13 @@
 from kon import Config, reset_config, set_config
 from kon.context import Context
 from kon.loop import build_system_prompt
+from kon.tools import all_tools
 
 
 def test_system_prompt_includes_guidelines():
     set_config(Config({}))
     try:
-        prompt = build_system_prompt("/tmp", Context("/tmp"))
+        prompt = build_system_prompt("/tmp", Context("/tmp"), tools=all_tools)
     finally:
         reset_config()
 
@@ -16,7 +17,12 @@ def test_system_prompt_includes_guidelines():
     assert "Use edit for precise changes" in prompt
     assert "Use write only for new files or complete rewrites" in prompt
     assert "Use bash for terminal operations" in prompt
+    assert "Use web_search/web_fetch instead of curl/wget" in prompt
     assert "Kon session logs are JSONL files in ~/.kon/sessions" in prompt
+    assert prompt.count("# Tool usage") == 1
+    tool_usage = prompt.split("# Tool usage", 1)[1]
+    assert "  - Use read" not in tool_usage
+    assert "- Use read to view files" in tool_usage
 
 
 def test_system_prompt_includes_cwd():

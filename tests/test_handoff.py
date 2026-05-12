@@ -131,7 +131,7 @@ class _FakeChat:
     def add_session_info(self, version: str) -> None:
         return None
 
-    def add_loaded_resources(self, context_paths, skill_paths) -> None:
+    def add_loaded_resources(self, context_paths, skills, tools) -> None:
         return None
 
     def add_handoff_link_message(

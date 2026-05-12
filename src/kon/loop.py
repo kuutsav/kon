@@ -56,9 +56,16 @@ def build_system_prompt(
     prompt = kon_config.llm.system_prompt.content
 
     if tools:
-        tool_names = {t.name for t in tools}
-        if tool_names & {"web_search", "web_fetch"}:
-            prompt += "\n- Use web_search/web_fetch instead of curl/wget via bash"
+        guidelines: list[str] = []
+        seen_guidelines: set[str] = set()
+        for tool in tools:
+            for guideline in tool.prompt_guidelines:
+                if guideline in seen_guidelines:
+                    continue
+                guidelines.append(guideline)
+                seen_guidelines.add(guideline)
+        if guidelines:
+            prompt += "\n\n# Tool usage\n\n- " + "\n- ".join(guidelines)
 
     if context.agents_files:
         prompt += "\n\n" + formatted_agent_mds(context.agents_files)

@@ -1,10 +1,11 @@
 import asyncio
 import ipaddress
 import socket
+from typing import cast
 from urllib.parse import urlparse
 
 from curl_cffi import AsyncSession, CurlOpt
-from html_to_markdown import ConversionOptions, convert
+from html_to_markdown import convert
 from lxml import html as lxml_html
 from pydantic import BaseModel, Field
 from readability import Document
@@ -28,12 +29,11 @@ _CHALLENGE_SIGNATURES = (
     "attention required",  # Cloudflare block page
 )
 
-# Inline SVG data URIs would otherwise become base64 noise.
-_CONVERT_OPTIONS = ConversionOptions(skip_images=True)
-
-# concat(';', ...) anchors to a property boundary to block url() false positives.
+# Inline SVG data URIs would otherwise become base64 noise — strip images via xpath instead.
+# NOTE: ConversionOptions(skip_images=True) triggers a HeadingStyle enum bug in
+# html-to-markdown 3.3.x.
 _HIDDEN_XPATH = (
-    "//script | //style | //noscript | //template"
+    "//script | //style | //noscript | //template | //img | //svg"
     " | //*[@hidden or @aria-hidden='true']"
     " | //*[contains(concat(';', translate(@style, ' \t\n', '')), ';display:none')]"
     " | //*[contains(concat(';', translate(@style, ' \t\n', '')), ';visibility:hidden')]"
@@ -115,9 +115,16 @@ async def _prepare_curl_resolve(url: str, cancel_event: asyncio.Event | None = N
     return []
 
 
+def _convert_html_to_markdown(html: str) -> str | None:
+    result = convert(html)
+    content = result["content"] if isinstance(result, dict) else result.content
+    return content or None
+
+
 def _extract_markdown(html: str) -> str | None:
     if not html:
         return None
+    tree = None
     try:
         tree = lxml_html.fromstring(html)
         for node in tree.xpath(_HIDDEN_XPATH):
@@ -127,9 +134,20 @@ def _extract_markdown(html: str) -> str | None:
     except Exception:
         doc_input = html  # fall back to readability's own lenient parser
     summary_html = Document(doc_input).summary()
-    if not summary_html or len(summary_html) < 50:
+    if summary_html and len(summary_html) >= 50:
+        content = _convert_html_to_markdown(summary_html)
+        if content and len(content.strip()) >= 50:
+            return content
+    if tree is None:
         return None
-    return convert(summary_html, _CONVERT_OPTIONS).content or None
+
+    fallback_nodes = tree.xpath("//main") or tree.xpath("//article") or tree.xpath("//body")
+    fallback_root = fallback_nodes[0] if fallback_nodes else tree
+    fallback_html = cast(str, lxml_html.tostring(fallback_root, encoding="unicode"))
+    content = _convert_html_to_markdown(fallback_html)
+    if not content or len(content.strip()) < 50:
+        return None
+    return content
 
 
 class WebFetchParams(BaseModel):
@@ -141,6 +159,9 @@ class WebFetchTool(BaseTool):
     tool_icon = "%"
     mutating = False
     params = WebFetchParams
+    prompt_guidelines = (
+        "Use web_search first to find relevant URLs (if not provided by the user)",
+    )
     description = (
         "Fetch a web page and extract its main content as clean markdown. "
         "Strips navigation, ads, and boilerplate. "

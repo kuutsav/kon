@@ -1,9 +1,13 @@
 import asyncio
 import json
+import uuid
 from collections.abc import AsyncIterator
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import aiohttp
+
+from kon import config as kon_config
 
 from ...core.types import (
     Message,
@@ -23,6 +27,16 @@ from ..oauth.openai import get_valid_openai_token, load_openai_credentials
 
 _MAX_RETRIES = 3
 _BASE_DELAY_MS = 1000
+_OPENAI_BETA_RESPONSES_WEBSOCKETS = "responses_websockets=2026-02-06"
+_WS_FALLBACK_SESSIONS: set[str] = set()
+
+
+class CodexTransportError(Exception):
+    pass
+
+
+class CodexNonTransportError(Exception):
+    pass
 
 
 def _format_provider_error(error: Exception) -> str:
@@ -42,6 +56,7 @@ class OpenAICodexResponsesProvider(BaseProvider):
 
     def __init__(self, config: ProviderConfig):
         super().__init__(config)
+        self._websocket_fallback = False
 
     async def _stream_impl(
         self,
@@ -102,6 +117,17 @@ class OpenAICodexResponsesProvider(BaseProvider):
             return f"{base}/responses"
         return f"{base}/codex/responses"
 
+    def _resolve_websocket_url(self) -> str:
+        parsed = urlsplit(self._resolve_url())
+        scheme = (
+            "wss"
+            if parsed.scheme == "https"
+            else "ws"
+            if parsed.scheme == "http"
+            else parsed.scheme
+        )
+        return urlunsplit((scheme, parsed.netloc, parsed.path, parsed.query, parsed.fragment))
+
     def _build_request_body(
         self,
         messages: list[Message],
@@ -150,8 +176,21 @@ class OpenAICodexResponsesProvider(BaseProvider):
         }
         if self.config.session_id:
             headers["session_id"] = self.config.session_id
+            headers["x-client-request-id"] = self.config.session_id
             headers["conversation_id"] = self.config.session_id
         return headers
+
+    def _build_websocket_headers(self, token: str, account_id: str) -> dict[str, str]:
+        request_id = self.config.session_id or str(uuid.uuid4())
+        return {
+            "Authorization": f"Bearer {token}",
+            "chatgpt-account-id": account_id,
+            "OpenAI-Beta": _OPENAI_BETA_RESPONSES_WEBSOCKETS,
+            "originator": "kon",
+            "User-Agent": "kon",
+            "x-client-request-id": request_id,
+            "session_id": request_id,
+        }
 
     async def _stream_codex(
         self,
@@ -165,145 +204,216 @@ class OpenAICodexResponsesProvider(BaseProvider):
         max_tokens: int | None,
         llm_stream: LLMStream,
     ) -> AsyncIterator[StreamPart]:
-        url = self._resolve_url()
         body = self._build_request_body(messages, system_prompt, tools, temperature)
-        headers = self._build_headers(token, account_id)
+        session_id = self.config.session_id
 
-        current_text = ""
-        current_thinking = ""
+        if session_id in _WS_FALLBACK_SESSIONS:
+            self._websocket_fallback = True
+        else:
+            emitted = False
+            try:
+                websocket_events = self._stream_websocket_events(
+                    body, self._build_websocket_headers(token, account_id)
+                )
+                async for part in self._process_codex_events(websocket_events, llm_stream):
+                    emitted = True
+                    yield part
+                return
+            except CodexNonTransportError as e:
+                yield StreamError(error=_format_provider_error(e))
+                return
+            except Exception as e:
+                if emitted:
+                    yield StreamError(error=_format_provider_error(e))
+                    return
+                self._websocket_fallback = True
+                if session_id:
+                    _WS_FALLBACK_SESSIONS.add(session_id)
+
+        try:
+            sse_events = self._stream_sse_events(body, self._build_headers(token, account_id))
+            async for part in self._process_codex_events(sse_events, llm_stream):
+                yield part
+        except Exception as e:
+            yield StreamError(error=_format_provider_error(e))
+
+    async def _process_codex_events(
+        self, events: AsyncIterator[dict[str, Any]], llm_stream: LLMStream
+    ) -> AsyncIterator[StreamPart]:
         current_tool_calls: dict[str, dict[str, Any]] = {}
         last_tool_call_id: str | None = None
         tool_call_index = 0
 
-        try:
-            last_error: str | None = None
+        async for event in events:
+            event_type = event.get("type")
+            if not isinstance(event_type, str):
+                continue
+
+            if event_type == "response.reasoning_summary_text.delta":
+                delta = event.get("delta")
+                if isinstance(delta, str):
+                    yield ThinkPart(think=delta)
+
+            elif event_type == "response.output_text.delta":
+                delta = event.get("delta")
+                if isinstance(delta, str):
+                    yield TextPart(text=delta)
+
+            elif event_type == "response.output_item.added":
+                item = event.get("item")
+                if isinstance(item, dict) and item.get("type") == "function_call":
+                    call_id = item.get("call_id")
+                    item_id = item.get("id")
+                    name = item.get("name")
+                    if isinstance(call_id, str) and isinstance(name, str):
+                        full_id = f"{call_id}|{item_id}" if isinstance(item_id, str) else call_id
+                        current_tool_calls[full_id] = {
+                            "id": full_id,
+                            "name": name,
+                            "arguments": "",
+                            "index": tool_call_index,
+                        }
+                        last_tool_call_id = full_id
+                        yield ToolCallStart(index=tool_call_index, id=full_id, name=name)
+                        tool_call_index += 1
+
+            elif event_type == "response.function_call_arguments.delta":
+                delta = event.get("delta")
+                if (
+                    isinstance(delta, str)
+                    and last_tool_call_id
+                    and last_tool_call_id in current_tool_calls
+                ):
+                    current_tool_calls[last_tool_call_id]["arguments"] += delta
+                    idx = int(current_tool_calls[last_tool_call_id]["index"])
+                    yield ToolCallDelta(index=idx, arguments_delta=delta)
+
+            elif event_type in {"response.completed", "response.done", "response.incomplete"}:
+                response_obj = event.get("response")
+                if isinstance(response_obj, dict):
+                    self._apply_response_metadata(response_obj, llm_stream)
+                    stop_reason = self._map_stop_reason(response_obj.get("status"))
+                    if current_tool_calls and stop_reason == StopReason.STOP:
+                        stop_reason = StopReason.TOOL_USE
+                    yield StreamDone(stop_reason=stop_reason)
+                    return
+
+            elif event_type == "error":
+                code = event.get("code")
+                message = event.get("message")
+                if isinstance(message, str) and message:
+                    raise CodexNonTransportError(f"Codex error: {message}")
+                if isinstance(code, str) and code:
+                    raise CodexNonTransportError(f"Codex error: {code}")
+                raise CodexNonTransportError(f"Codex error: {json.dumps(event)}")
+
+            elif event_type == "response.failed":
+                response_obj = event.get("response")
+                msg = None
+                if isinstance(response_obj, dict):
+                    err = response_obj.get("error")
+                    if isinstance(err, dict):
+                        msg = err.get("message")
+                err_msg = msg if isinstance(msg, str) and msg else "Codex response failed"
+                raise CodexNonTransportError(err_msg)
+
+    def _apply_response_metadata(
+        self, response_obj: dict[str, Any], llm_stream: LLMStream
+    ) -> None:
+        usage = response_obj.get("usage")
+        if isinstance(usage, dict):
+            input_details = usage.get("input_tokens_details")
+            cached = 0
+            cache_write = int(usage.get("cache_write_tokens") or 0)
+            if isinstance(input_details, dict):
+                cached = int(input_details.get("cached_tokens") or 0)
+                cache_write = int(
+                    input_details.get("cache_write_tokens")
+                    or input_details.get("cache_creation_tokens")
+                    or cache_write
+                )
+            input_tokens = int(usage.get("input_tokens") or 0)
+            non_cached_input = max(input_tokens - cached, 0)
+            llm_stream._usage = Usage(
+                input_tokens=non_cached_input,
+                output_tokens=int(usage.get("output_tokens") or 0),
+                cache_read_tokens=cached,
+                cache_write_tokens=cache_write,
+            )
+        rid = response_obj.get("id")
+        if isinstance(rid, str):
+            llm_stream._id = rid
+
+    async def _stream_sse_events(
+        self, body: dict[str, Any], headers: dict[str, str]
+    ) -> AsyncIterator[dict[str, Any]]:
+        last_error: str | None = None
+        timeout = aiohttp.ClientTimeout(total=kon_config.llm.request_timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
             response: aiohttp.ClientResponse | None = None
-            session = aiohttp.ClientSession()
+            for attempt in range(_MAX_RETRIES + 1):
+                response = await session.post(self._resolve_url(), headers=headers, json=body)
+                if response.status < 400:
+                    break
+                error_text = await response.text()
+                last_error = f"Codex API error ({response.status}): {error_text}"
+                if attempt < _MAX_RETRIES and _is_retryable_status(response.status):
+                    delay = _BASE_DELAY_MS * (2**attempt) / 1000
+                    await asyncio.sleep(delay)
+                    continue
+                raise CodexNonTransportError(last_error)
 
-            try:
-                for attempt in range(_MAX_RETRIES + 1):
-                    response = await session.post(url, headers=headers, json=body)
-                    if response.status < 400:
-                        break
-                    error_text = await response.text()
-                    last_error = f"Codex API error ({response.status}): {error_text}"
-                    if attempt < _MAX_RETRIES and _is_retryable_status(response.status):
-                        delay = _BASE_DELAY_MS * (2**attempt) / 1000
-                        await asyncio.sleep(delay)
+            if response is None or response.status >= 400:
+                raise CodexNonTransportError(last_error or "Codex request failed after retries")
+
+            async for event in self._parse_sse(response):
+                yield event
+
+    async def _stream_websocket_events(
+        self, body: dict[str, Any], headers: dict[str, str]
+    ) -> AsyncIterator[dict[str, Any]]:
+        timeout = aiohttp.ClientTimeout(total=kon_config.llm.request_timeout_seconds)
+        async with (
+            aiohttp.ClientSession(timeout=timeout) as session,
+            session.ws_connect(self._resolve_websocket_url(), headers=headers) as ws,
+        ):
+            await ws.send_json({"type": "response.create", **body})
+            saw_completion = False
+            async for msg in ws:
+                if msg.type in {aiohttp.WSMsgType.TEXT, aiohttp.WSMsgType.BINARY}:
+                    try:
+                        raw = (
+                            msg.data.decode()
+                            if isinstance(msg.data, bytes | bytearray)
+                            else msg.data
+                        )
+                        event = json.loads(raw)
+                    except Exception as e:
+                        raise CodexNonTransportError(f"Invalid Codex WebSocket JSON: {e}") from e
+                    if not isinstance(event, dict):
                         continue
-                    yield StreamError(error=last_error)
-                    return
-
-                if response is None or response.status >= 400:
-                    yield StreamError(error=last_error or "Codex request failed after retries")
-                    return
-
-                async for event in self._parse_sse(response):
                     event_type = event.get("type")
-                    if not isinstance(event_type, str):
-                        continue
-
-                    if event_type == "response.reasoning_summary_text.delta":
-                        delta = event.get("delta")
-                        if isinstance(delta, str):
-                            current_thinking += delta
-                            yield ThinkPart(think=delta)
-
-                    elif event_type == "response.output_text.delta":
-                        delta = event.get("delta")
-                        if isinstance(delta, str):
-                            current_text += delta
-                            yield TextPart(text=delta)
-
-                    elif event_type == "response.output_item.added":
-                        item = event.get("item")
-                        if isinstance(item, dict) and item.get("type") == "function_call":
-                            call_id = item.get("call_id")
-                            item_id = item.get("id")
-                            name = item.get("name")
-                            if isinstance(call_id, str) and isinstance(name, str):
-                                full_id = (
-                                    f"{call_id}|{item_id}" if isinstance(item_id, str) else call_id
-                                )
-                                current_tool_calls[full_id] = {
-                                    "id": full_id,
-                                    "name": name,
-                                    "arguments": "",
-                                    "index": tool_call_index,
-                                }
-                                last_tool_call_id = full_id
-                                yield ToolCallStart(index=tool_call_index, id=full_id, name=name)
-                                tool_call_index += 1
-
-                    elif event_type == "response.function_call_arguments.delta":
-                        delta = event.get("delta")
-                        if (
-                            isinstance(delta, str)
-                            and last_tool_call_id
-                            and last_tool_call_id in current_tool_calls
-                        ):
-                            current_tool_calls[last_tool_call_id]["arguments"] += delta
-                            idx = int(current_tool_calls[last_tool_call_id]["index"])
-                            yield ToolCallDelta(index=idx, arguments_delta=delta)
-
-                    elif event_type in {"response.completed", "response.done"}:
-                        response_obj = event.get("response")
-                        if isinstance(response_obj, dict):
-                            usage = response_obj.get("usage")
-                            if isinstance(usage, dict):
-                                input_details = usage.get("input_tokens_details")
-                                cached = 0
-                                cache_write = int(usage.get("cache_write_tokens") or 0)
-                                if isinstance(input_details, dict):
-                                    cached = int(input_details.get("cached_tokens") or 0)
-                                    cache_write = int(
-                                        input_details.get("cache_write_tokens")
-                                        or input_details.get("cache_creation_tokens")
-                                        or cache_write
-                                    )
-                                input_tokens = int(usage.get("input_tokens") or 0)
-                                non_cached_input = max(input_tokens - cached, 0)
-                                llm_stream._usage = Usage(
-                                    input_tokens=non_cached_input,
-                                    output_tokens=int(usage.get("output_tokens") or 0),
-                                    cache_read_tokens=cached,
-                                    cache_write_tokens=cache_write,
-                                )
-                            rid = response_obj.get("id")
-                            if isinstance(rid, str):
-                                llm_stream._id = rid
-
-                            stop_reason = self._map_stop_reason(response_obj.get("status"))
-                            if current_tool_calls and stop_reason == StopReason.STOP:
-                                stop_reason = StopReason.TOOL_USE
-                            yield StreamDone(stop_reason=stop_reason)
-                            return
-
-                    elif event_type == "error":
-                        code = event.get("code")
-                        message = event.get("message")
-                        if isinstance(message, str) and message:
-                            yield StreamError(error=f"Codex error: {message}")
-                        elif isinstance(code, str) and code:
-                            yield StreamError(error=f"Codex error: {code}")
-                        else:
-                            yield StreamError(error=f"Codex error: {json.dumps(event)}")
+                    if event_type in {
+                        "response.completed",
+                        "response.done",
+                        "response.incomplete",
+                    }:
+                        saw_completion = True
+                    yield event
+                    if saw_completion:
                         return
+                elif msg.type == aiohttp.WSMsgType.ERROR:
+                    error = ws.exception()
+                    raise CodexTransportError(str(error) if error else "WebSocket error")
+                elif msg.type in {
+                    aiohttp.WSMsgType.CLOSE,
+                    aiohttp.WSMsgType.CLOSED,
+                    aiohttp.WSMsgType.CLOSING,
+                }:
+                    break
 
-                    elif event_type == "response.failed":
-                        response_obj = event.get("response")
-                        msg = None
-                        if isinstance(response_obj, dict):
-                            err = response_obj.get("error")
-                            if isinstance(err, dict):
-                                msg = err.get("message")
-                        err_msg = msg if isinstance(msg, str) and msg else "Codex response failed"
-                        yield StreamError(error=err_msg)
-                        return
-            finally:
-                await session.close()
-        except Exception as e:
-            yield StreamError(error=_format_provider_error(e))
+            if not saw_completion:
+                raise CodexTransportError("WebSocket stream closed before response.completed")
 
     async def _parse_sse(self, response: aiohttp.ClientResponse) -> AsyncIterator[dict[str, Any]]:
         buffer = ""
@@ -321,8 +431,8 @@ class OpenAICodexResponsesProvider(BaseProvider):
                     continue
                 try:
                     parsed = json.loads(data)
-                except json.JSONDecodeError:
-                    continue
+                except json.JSONDecodeError as e:
+                    raise CodexNonTransportError(f"Invalid Codex SSE JSON: {e}") from e
                 if isinstance(parsed, dict):
                     yield parsed
 

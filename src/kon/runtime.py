@@ -269,9 +269,19 @@ class ConversationRuntime:
 
     def switch_model(self, model: Model) -> None:
         current_api_type = get_provider_api_type(self.provider) if self.provider else None
+        current_provider = (
+            self.provider.config.provider or self.model_provider
+            if self.provider
+            else self.model_provider
+        )
+        current_base_url = self.provider.config.base_url if self.provider else None
+        base_url_changed = (current_base_url or "").rstrip("/") != (model.base_url or "").rstrip(
+            "/"
+        )
+        provider_changed = current_provider != model.provider
         replacement_provider: BaseProvider | None = None
 
-        if model.api != current_api_type:
+        if model.api != current_api_type or provider_changed or base_url_changed:
             provider_config = self._provider_config(
                 model=model.id,
                 provider=model.provider,

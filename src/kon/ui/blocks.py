@@ -202,6 +202,9 @@ class ToolBlock(Static):
         self._call_msg = call_msg
         self._ui_summary: str | None = None
         self._ui_details: str | None = None
+        self._ui_details_full: str | None = None
+        self._result_markup: bool = True
+        self._expanded: bool = False
         self._success: bool | None = None
         self._awaiting_approval: bool = False
         self._approval_preview: str | None = None
@@ -218,8 +221,9 @@ class ToolBlock(Static):
         result = Text()
         formatted_name = " ".join(word.capitalize() for word in self._name.split("_"))
 
-        icon_style = colors.dim
-        name_style = colors.dim
+        success_style = Style(color=colors.muted, bold=True)
+        icon_style: str | Style = success_style
+        name_style: str | Style = success_style
         if self._success is None:
             icon_style = colors.running
             name_style = colors.running
@@ -266,7 +270,7 @@ class ToolBlock(Static):
             content = self._call_msg
 
         rendered = self._render_markup_safe(content)
-        return Text(rendered.plain, style=config.ui.colors.muted)
+        return Text(rendered.plain, style=config.ui.colors.dim)
 
     def _render_markup_safe(self, content: str) -> Text:
         try:
@@ -369,17 +373,38 @@ class ToolBlock(Static):
         self.query_one("#tool-header", Label).update(self._format_header())
 
     def set_result(
-        self, ui_summary: str | None, ui_details: str | None, success: bool, markup: bool = True
+        self,
+        ui_summary: str | None,
+        ui_details: str | None,
+        success: bool,
+        markup: bool = True,
+        ui_details_full: str | None = None,
     ) -> None:
         self._ui_summary = ui_summary
         self._ui_details = ui_details
+        self._ui_details_full = ui_details_full
+        self._result_markup = markup
         self._success = success
         self._awaiting_approval = False
         self._set_state(success)
+        self._render_result_output()
+        self.query_one("#tool-header", Label).update(self._format_header())
 
+    def set_expanded(self, expanded: bool) -> None:
+        if self._expanded == expanded:
+            return
+        self._expanded = expanded
+        self._render_result_output()
+
+    def _render_result_output(self) -> None:
         output = self.query_one("#tool-output", Label)
+        ui_details = (
+            self._ui_details_full if self._expanded and self._ui_details_full else self._ui_details
+        )
         if ui_details:
-            rendered = self._render_markup_safe(ui_details) if markup else Text(ui_details)
+            rendered = (
+                self._render_markup_safe(ui_details) if self._result_markup else Text(ui_details)
+            )
             # Detail blocks need a 1-line gap; drop compact spacing that was
             # applied before we knew this tool would have output.
             self.remove_class("-compact")
@@ -392,8 +417,6 @@ class ToolBlock(Static):
             self.remove_class("-with-details")
             output.remove_class("-details")
             output.add_class("-hidden")
-
-        self.query_one("#tool-header", Label).update(self._format_header())
 
 
 class UserBlock(Static):

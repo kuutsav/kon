@@ -14,7 +14,7 @@ default = true
 
 [project]
 name = "kon-coding-agent"
-version = "0.3.7"
+version = "0.3.8"
 description = "Minimal coding agent"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -24,7 +24,7 @@ dependencies = [
     "anthropic>=0.79.0",
     "curl-cffi>=0.15.0",
     "ddgs>=9.0.0",
-    "html-to-markdown>=3.1.0,<3.3.0",
+    "html-to-markdown>=3.3.0,<3.4.0",
     "openai>=2.21.0",
     "pillow>=12.1.1",
     "pydantic>=2.12.5",

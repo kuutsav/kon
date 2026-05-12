@@ -16,7 +16,7 @@ from ..llm import (
     openai_login,
 )
 from ..runtime import ConversationRuntime
-from ..session import Session
+from ..session import Session, SessionInfo
 from ..themes import get_theme_options
 from .chat import ChatLog
 from .clipboard import copy_to_clipboard
@@ -388,7 +388,8 @@ class CommandsMixin:
                 context_paths=[
                     format_path(f.path) for f in self._runtime.agent.context.agents_files
                 ],
-                skill_paths=[format_path(s.path) for s in self._runtime.agent.context.skills],
+                skills=self._runtime.agent.context.skills,
+                tools=self._runtime.tools,
             )
 
     def _handle_handoff_command(self, args: str) -> None:
@@ -486,11 +487,48 @@ class CommandsMixin:
 
     def _build_resume_items(self) -> list[ListItem]:
         sessions = Session.list(self._cwd)
-        items: list[ListItem] = []
+
+        # Build tree structure from handoff relationships
+        by_id: dict[str, SessionInfo] = {s.id: s for s in sessions}
+        children: dict[str, list[SessionInfo]] = {}
+        roots: list[SessionInfo] = []
+
         for session in sessions:
-            label = self._format_session_label(session.first_message)
-            caption = f"{self._format_session_age(session.modified)} {session.message_count}"
-            items.append(ListItem(value=session, label=label, description=caption))
+            pid = session.parent_session_id
+            if pid and pid in by_id:
+                children.setdefault(pid, []).append(session)
+            else:
+                roots.append(session)
+
+        # Sort children within each parent by modified time (newest first,
+        # matching the root-level sort from Session.list)
+        for kids in children.values():
+            kids.sort(key=lambda s: s.modified, reverse=True)
+
+        # DFS flatten: roots are already sorted by modified (from Session.list)
+        items: list[ListItem] = []
+        accent = config.ui.colors.accent
+
+        def _walk(node: SessionInfo, depth: int) -> None:
+            # Indent with spaces, single └ connector
+            prefix = "   " * (depth - 1) + " └ " if depth > 0 else ""
+            label = self._format_session_label(node.first_message)
+            caption = f"{self._format_session_age(node.modified)} {node.message_count}"
+            items.append(
+                ListItem(
+                    value=node,
+                    label=label,
+                    description=caption,
+                    prefix=prefix,
+                    prefix_style=accent,
+                )
+            )
+            for child in children.get(node.id, []):
+                _walk(child, depth + 1)
+
+        for root in roots:
+            _walk(root, 0)
+
         return items
 
     def _show_resume_sessions(self) -> None:

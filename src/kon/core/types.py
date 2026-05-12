@@ -129,7 +129,8 @@ class ToolResultMessage(BaseModel):
     tool_name: str
     content: list[TextContent | ImageContent]
     ui_summary: str | None = None  # One-line UI text rendered on tool header line
-    ui_details: str | None = None  # Multiline UI text rendered below the header
+    ui_details: str | None = None  # Collapsed multiline UI text rendered below the header
+    ui_details_full: str | None = None  # Expanded multiline UI text rendered below the header
     is_error: bool = False
     file_changes: FileChanges | None = None
 
@@ -165,7 +166,8 @@ class ToolResult(BaseModel):
     result: str | None = None  # Raw result (sent to LLM)
     images: list[ImageContent] | None = None  # Images to include in result
     ui_summary: str | None = None  # One-line result text appended to the tool header
-    ui_details: str | None = None  # Multiline result body rendered below the header
+    ui_details: str | None = None  # Collapsed multiline result body rendered below the header
+    ui_details_full: str | None = None  # Expanded multiline result body rendered below the header
     file_changes: FileChanges | None = None  # Track +/- lines for edit/write tools
 
 

@@ -1,4 +1,5 @@
 import time
+from pathlib import Path
 from typing import Literal
 
 from rich.spinner import Spinner
@@ -7,8 +8,10 @@ from textual.containers import VerticalScroll
 from textual.timer import Timer
 from textual.widgets import Label
 
-from kon import config
+from kon import config, get_config_dir
+from kon.context.skills import Skill
 from kon.permissions import ApprovalResponse
+from kon.tools import BaseTool
 
 from .blocks import (
     ContentBlock,
@@ -24,6 +27,14 @@ from .blocks import (
 
 MAX_CHILDREN = 300
 PRUNE_TO = 200
+
+
+def _format_skill_label(skill: Skill) -> str:
+    global_skills_dir = (get_config_dir() / "skills").resolve(strict=False)
+    skill_path = Path(skill.path).resolve(strict=False)
+    if skill_path.is_relative_to(global_skills_dir):
+        return f"{skill.name} (global)"
+    return skill.name
 
 
 def _append_aligned_section(
@@ -54,6 +65,7 @@ class ChatLog(VerticalScroll):
         super().__init__(**kwargs)
         self._current_block: ThinkingBlock | ContentBlock | None = None
         self._tool_blocks: dict[str, ToolBlock] = {}
+        self._tool_output_expanded = False
         self._anchor_released: bool = False
         self._last_status_label: Label | None = None
         self._spinner_label: Label | None = None
@@ -108,6 +120,7 @@ class ChatLog(VerticalScroll):
         if children:
             await self.remove_children(children)
         self._tool_blocks.clear()
+        self._tool_output_expanded = False
         self._current_block = None
         self._last_status_label = None
 
@@ -180,52 +193,80 @@ class ChatLog(VerticalScroll):
         dim = config.ui.colors.dim
         muted = config.ui.colors.muted
 
-        info_text.append("kon", style=f"{accent} bold")
-        info_text.append(f" v{version}\n", style=dim)
+        # Logo
+        logo_lines = ("░█░█░█▀█░█▀█", "░█▀▄░█░█░█░█", "░▀░▀░▀▀▀░▀░▀")
+        for i, line in enumerate(logo_lines):
+            info_text.append(line, style=accent)
+            if i == len(logo_lines) - 1:
+                info_text.append(f" v{version}", style=dim)
+            info_text.append("\n")
+        info_text.append("\n")
 
-        def append_hint(key: str, description: str, trailing_newline: bool = True) -> None:
-            info_text.append(key, style=dim)
-            info_text.append(f" {description}", style=muted)
-            if trailing_newline:
-                info_text.append("\n", style=muted)
+        shortcut_rows = (
+            (
+                ("/", "commands"),
+                ("@", "files/dirs"),
+                ("tab", "complete paths"),
+                ("↑/↓", "history"),
+                ("shift+tab", "permissions"),
+            ),
+            (
+                ("esc", "to interrupt"),
+                ("shift+enter", "add newline"),
+                ("ctrl+c", "clear the input"),
+                ("ctrl+c x2", "exit"),
+            ),
+            (
+                ("enter", "queue"),
+                ("alt+enter", "steer"),
+                ("ctrl+t", "toggle thinking"),
+                ("ctrl+shift+t", "cycle thinking"),
+            ),
+        )
 
-        append_hint("esc", "to interrupt")
-        append_hint("@", "for files/folders")
-        append_hint("/", "for cmds/skills")
-        append_hint("shift+enter", "for newline")
-        append_hint("↑/↓", "for history")
-        append_hint("tab", "to autocomplete paths")
-        append_hint("ctrl+c", "to clear input")
-        append_hint("ctrl+c x2", "to quit")
-        append_hint("enter", "to queue if busy")
-        append_hint("alt+enter", "to steer if busy")
-        append_hint("shift+tab", "to cycle modes")
-        append_hint("ctrl+t", "to show/hide thinking")
-        append_hint("ctrl+shift+t", "to cycle thinking", trailing_newline=False)
+        for row_idx, row in enumerate(shortcut_rows):
+            for item_idx, (key, desc) in enumerate(row):
+                if item_idx > 0:
+                    info_text.append(" • ", style=dim)
+                info_text.append(key, style=muted)
+                info_text.append(f" {desc}", style=dim)
+            if row_idx < len(shortcut_rows) - 1:
+                info_text.append("\n")
 
         info_label = Label(info_text)
         info_label.add_class("session-info")
         self.mount(info_label, before=0)
 
-    def add_loaded_resources(self, context_paths: list[str], skill_paths: list[str]) -> None:
-        if not context_paths and not skill_paths:
+    def add_loaded_resources(
+        self, context_paths: list[str], skills: list[Skill], tools: list[BaseTool]
+    ) -> None:
+        if not context_paths and not skills and not tools:
             return
 
         dim_color = config.ui.colors.dim
         notice_color = config.ui.colors.notice
         text = Text()
 
+        if tools:
+            text.append("[Tools]\n", style=notice_color)
+            text.append("  ", style=dim_color)
+            text.append(", ".join(tool.name for tool in tools), style=dim_color)
+            text.append("\n", style=dim_color)
+
         if context_paths:
+            if tools:
+                text.append("\n")
             text.append("[Context]\n", style=notice_color)
             for path in context_paths:
                 text.append(f"  {path}\n", style=dim_color)
 
-        if skill_paths:
-            if context_paths:
+        if skills:
+            if context_paths or tools:
                 text.append("\n")
             text.append("[Skills]\n", style=notice_color)
-            for path in skill_paths:
-                text.append(f"  {path}\n", style=dim_color)
+            text.append("  ", style=dim_color)
+            text.append(", ".join(_format_skill_label(skill) for skill in skills), style=dim_color)
+            text.append("\n", style=dim_color)
 
         # Remove trailing newline
         text.rstrip()
@@ -321,6 +362,7 @@ class ChatLog(VerticalScroll):
             ("escape", "Cancel completion / interrupt agent"),
             ("ctrl+c", "Clear input (press twice to quit)"),
             ("ctrl+t", "Toggle thinking visibility"),
+            ("ctrl+o", "Toggle tool output expansion"),
             ("ctrl+shift+t", "Cycle thinking levels"),
             ("shift+tab", "Cycle permission mode"),
         ]
@@ -403,6 +445,7 @@ class ChatLog(VerticalScroll):
         self, name: str, tool_id: str, call_msg: str | None = None, icon: str = "→"
     ) -> ToolBlock:
         block = ToolBlock(name=name, call_msg=call_msg, icon=icon)
+        block.set_expanded(self._tool_output_expanded)
 
         # Consecutive tool calls without detail output render compactly (no
         # margin). Tools with detail output (diffs, bash output, etc.) always
@@ -433,10 +476,13 @@ class ChatLog(VerticalScroll):
         ui_details: str | None,
         success: bool,
         markup: bool = True,
+        ui_details_full: str | None = None,
     ) -> None:
         block = self._tool_blocks.get(tool_id)
         if block:
-            block.set_result(ui_summary, ui_details, success, markup=markup)
+            block.set_result(
+                ui_summary, ui_details, success, markup=markup, ui_details_full=ui_details_full
+            )
             if ui_details:
                 # All ToolStartEvents arrive during streaming before any
                 # results, so later siblings were mounted compact.  Now that
@@ -457,6 +503,17 @@ class ChatLog(VerticalScroll):
         if next_index >= len(children):
             return None
         return children[next_index]
+
+    def set_tool_output_expanded(self, expanded: bool) -> None:
+        self._tool_output_expanded = expanded
+        for block in self._tool_blocks.values():
+            block.set_expanded(expanded)
+        self._scroll_if_anchored(animate=False)
+
+    def toggle_tool_output_expanded(self) -> bool:
+        expanded = not self._tool_output_expanded
+        self.set_tool_output_expanded(expanded)
+        return expanded
 
     def update_tool_call_msg(self, tool_id: str, call_msg: str) -> None:
         block = self._tool_blocks.get(tool_id)

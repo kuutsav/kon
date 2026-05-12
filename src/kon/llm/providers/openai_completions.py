@@ -97,7 +97,7 @@ class OpenAICompletionsProvider(BaseProvider):
 
         api_key = resolve_api_key(
             config.api_key,
-            env_vars=("DEEPSEEK_API_KEY", "OPENAI_API_KEY", "ZAI_API_KEY"),
+            env_vars=self._env_vars_for_provider(config),
             base_url=config.base_url,
             auth_mode=config.openai_compat_auth_mode,
         )
@@ -115,6 +115,18 @@ class OpenAICompletionsProvider(BaseProvider):
         self._compat = _detect_compat(
             config.provider or "", config.base_url or "", config.model or ""
         )
+
+    @staticmethod
+    def _env_vars_for_provider(config: ProviderConfig) -> tuple[str, ...]:
+        provider = (config.provider or "").lower()
+        base_url = (config.base_url or "").lower()
+
+        if provider == "deepseek" or "api.deepseek.com" in base_url:
+            return ("DEEPSEEK_API_KEY", "OPENAI_API_KEY")
+        if provider in {"zai", "zhipu"} or "api.z.ai" in base_url:
+            return ("ZAI_API_KEY", "OPENAI_API_KEY")
+
+        return ("OPENAI_API_KEY",)
 
     async def _stream_impl(
         self,

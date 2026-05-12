@@ -53,9 +53,8 @@ MODELS: dict[str, Model] = {
         api=ApiType.OPENAI_COMPLETIONS,
         base_url="https://api.z.ai/api/coding/paas/v4",
         max_tokens=8192,
-        supports_images=False,
+        supports_images=True,
         supports_thinking=True,
-        vision_model="glm-4v-flash",
     ),
     # DeepSeek models (OpenAI-compatible Chat Completions API)
     "deepseek-v4-flash": Model(

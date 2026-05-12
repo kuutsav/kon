@@ -24,7 +24,7 @@ def test_info_bar_shows_auto_permission_mode_before_file_changes():
     finally:
         reset_config()
 
-    assert rendered.plain == "✓✓ auto • 1 file +2 -1"
+    assert rendered.plain == "✓ auto • 1 file +2 -1"
     assert rendered.spans[0].style == "#d3869b"
 
 
@@ -37,7 +37,7 @@ def test_info_bar_shows_prompt_permission_mode_without_file_changes():
     finally:
         reset_config()
 
-    assert rendered.plain == "⏸ prompt"
+    assert rendered.plain == "⏹ prompt"
 
 
 def test_info_bar_updates_permission_mode_without_layout():
@@ -47,5 +47,16 @@ def test_info_bar_updates_permission_mode_without_layout():
 
     info_bar.set_permission_mode("auto")
 
-    assert cast(Any, label.content).plain == "✓✓ auto"
+    assert cast(Any, label.content).plain == "✓ auto"
+    assert label.layout_values == [False]
+
+
+def test_info_bar_updates_git_branch_without_layout(monkeypatch):
+    info_bar = InfoBar("/tmp", "model")
+    label = _FakeLabel()
+    monkeypatch.setattr(info_bar, "query_one", lambda *args: label)
+
+    info_bar.set_git_branch("feature")
+
+    assert cast(Any, label.content).plain == "/tmp (⌥ feature)"
     assert label.layout_values == [False]

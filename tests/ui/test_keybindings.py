@@ -14,5 +14,6 @@ def test_thinking_and_permission_mode_keybindings():
     bindings = dict(_binding_key_and_action(binding) for binding in Kon.BINDINGS)
 
     assert bindings["ctrl+t"] == "toggle_thinking"
+    assert bindings["ctrl+o"] == "toggle_tool_output"
     assert bindings["ctrl+shift+t"] == "cycle_thinking_level"
     assert bindings["shift+tab"] == "cycle_permission_mode"

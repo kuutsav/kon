@@ -19,6 +19,7 @@ from ..tools import BaseTool, get_tool, tools_by_name
 from .chat import ChatLog
 from .commands import CommandsMixin
 from .input import InputBox
+from .tool_output import escape_tool_output_text, truncate_tool_output_text
 from .widgets import InfoBar, StatusLine, format_path
 
 
@@ -67,24 +68,14 @@ class SessionUIMixin:
         except Exception:
             return json.dumps(tool_call.arguments) if tool_call.arguments else ""
 
-    def _truncate_tool_output(self, text: str, max_lines: int = 5) -> str:
-        if not text:
-            return text
-
-        lines = text.split("\n")
-        if len(lines) > max_lines:
-            hidden = len(lines) - max_lines
-            lines = lines[:max_lines]
-            lines.append(f"... ({hidden} more lines)")
-
-        return "\n".join(lines)
-
-    def _format_tool_result_text(self, message: ToolResultMessage) -> str:
+    def _format_tool_result_text(self, message: ToolResultMessage) -> tuple[str, str | None]:
         if message.content:
             parts = [part.text for part in message.content if isinstance(part, TextContent)]
-            return self._truncate_tool_output("".join(parts))
+            full_text = "".join(parts)
+            collapsed_text, truncated = truncate_tool_output_text(full_text)
+            return collapsed_text, escape_tool_output_text(full_text) if truncated else None
 
-        return ""
+        return "", None
 
     def _render_session_entries(self, session: Session) -> None:
         chat = self.query_one("#chat-log", ChatLog)
@@ -120,12 +111,17 @@ class SessionUIMixin:
                     markup = True
                     ui_summary = message.ui_summary
                     ui_details = message.ui_details
+                    ui_details_full = message.ui_details_full
                     if ui_summary is None and ui_details is None:
-                        ui_details = self._format_tool_result_text(message)
-                        markup = False
+                        ui_details, ui_details_full = self._format_tool_result_text(message)
 
                     chat.set_tool_result(
-                        tool_id, ui_summary, ui_details, not message.is_error, markup=markup
+                        tool_id,
+                        ui_summary,
+                        ui_details,
+                        not message.is_error,
+                        markup=markup,
+                        ui_details_full=ui_details_full,
                     )
             elif isinstance(entry, CompactionEntry):
                 chat.add_compaction_message(entry.tokens_before)
@@ -218,7 +214,8 @@ class SessionUIMixin:
                 context_paths=[
                     format_path(f.path) for f in self._runtime.agent.context.agents_files
                 ],
-                skill_paths=[format_path(s.path) for s in self._runtime.agent.context.skills],
+                skills=self._runtime.agent.context.skills,
+                tools=self._runtime.tools,
             )
 
         self._render_session_entries(session)

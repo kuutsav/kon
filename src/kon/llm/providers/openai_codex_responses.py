@@ -22,11 +22,12 @@ from ...core.types import (
     ToolDefinition,
     Usage,
 )
-from ..base import BaseProvider, LLMStream, ProviderConfig
+from ..base import BaseProvider, LLMStream
 from ..oauth.openai import get_valid_openai_token, load_openai_credentials
 
 _MAX_RETRIES = 3
 _BASE_DELAY_MS = 1000
+_CONNECT_TIMEOUT_SECONDS = 30
 _OPENAI_BETA_RESPONSES_WEBSOCKETS = "responses_websockets=2026-02-06"
 _WS_FALLBACK_SESSIONS: set[str] = set()
 
@@ -36,7 +37,9 @@ class CodexTransportError(Exception):
 
 
 class CodexNonTransportError(Exception):
-    pass
+    def __init__(self, message: str, *, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 def _format_provider_error(error: Exception) -> str:
@@ -53,10 +56,6 @@ def _is_retryable_status(status: int) -> bool:
 class OpenAICodexResponsesProvider(BaseProvider):
     name = "openai-codex"
     thinking_levels: list[str] = ["none", "minimal", "low", "medium", "high", "xhigh"]  # noqa: RUF012
-
-    def __init__(self, config: ProviderConfig):
-        super().__init__(config)
-        self._websocket_fallback = False
 
     async def _stream_impl(
         self,
@@ -207,9 +206,7 @@ class OpenAICodexResponsesProvider(BaseProvider):
         body = self._build_request_body(messages, system_prompt, tools, temperature)
         session_id = self.config.session_id
 
-        if session_id in _WS_FALLBACK_SESSIONS:
-            self._websocket_fallback = True
-        else:
+        if session_id not in _WS_FALLBACK_SESSIONS:
             emitted = False
             try:
                 websocket_events = self._stream_websocket_events(
@@ -222,11 +219,10 @@ class OpenAICodexResponsesProvider(BaseProvider):
             except CodexNonTransportError as e:
                 yield StreamError(error=_format_provider_error(e))
                 return
-            except Exception as e:
+            except (CodexTransportError, aiohttp.ClientError, OSError) as e:
                 if emitted:
                     yield StreamError(error=_format_provider_error(e))
                     return
-                self._websocket_fallback = True
                 if session_id:
                     _WS_FALLBACK_SESSIONS.add(session_id)
 
@@ -241,8 +237,24 @@ class OpenAICodexResponsesProvider(BaseProvider):
         self, events: AsyncIterator[dict[str, Any]], llm_stream: LLMStream
     ) -> AsyncIterator[StreamPart]:
         current_tool_calls: dict[str, dict[str, Any]] = {}
+        call_key_by_item_id: dict[str, str] = {}
         last_tool_call_id: str | None = None
         tool_call_index = 0
+
+        def _reconcile(call_data: dict[str, Any], final_args: str) -> ToolCallDelta | None:
+            current_args = call_data["arguments"]
+            if final_args.startswith(current_args):
+                missing = final_args[len(current_args) :]
+                if not missing:
+                    return None
+                call_data["arguments"] += missing
+                return ToolCallDelta(index=call_data["index"], arguments_delta=missing)
+            if final_args == current_args:
+                return None
+            call_data["arguments"] = final_args
+            return ToolCallDelta(
+                index=call_data["index"], arguments_delta=final_args, replace=True
+            )
 
         async for event in events:
             event_type = event.get("type")
@@ -267,32 +279,85 @@ class OpenAICodexResponsesProvider(BaseProvider):
                     name = item.get("name")
                     if isinstance(call_id, str) and isinstance(name, str):
                         full_id = f"{call_id}|{item_id}" if isinstance(item_id, str) else call_id
+                        initial_args = item.get("arguments")
+                        initial_args_text = initial_args if isinstance(initial_args, str) else ""
                         current_tool_calls[full_id] = {
                             "id": full_id,
                             "name": name,
-                            "arguments": "",
+                            "arguments": initial_args_text,
                             "index": tool_call_index,
                         }
+                        if isinstance(item_id, str) and item_id:
+                            call_key_by_item_id[item_id] = full_id
                         last_tool_call_id = full_id
                         yield ToolCallStart(index=tool_call_index, id=full_id, name=name)
+                        if initial_args_text:
+                            yield ToolCallDelta(
+                                index=tool_call_index, arguments_delta=initial_args_text
+                            )
                         tool_call_index += 1
 
             elif event_type == "response.function_call_arguments.delta":
                 delta = event.get("delta")
-                if (
-                    isinstance(delta, str)
-                    and last_tool_call_id
-                    and last_tool_call_id in current_tool_calls
-                ):
-                    current_tool_calls[last_tool_call_id]["arguments"] += delta
-                    idx = int(current_tool_calls[last_tool_call_id]["index"])
-                    yield ToolCallDelta(index=idx, arguments_delta=delta)
+                if not isinstance(delta, str):
+                    continue
+                event_item_id = event.get("item_id")
+                if isinstance(event_item_id, str) and event_item_id:
+                    call_key = call_key_by_item_id.get(event_item_id)
+                else:
+                    call_key = last_tool_call_id
+                if not call_key or call_key not in current_tool_calls:
+                    continue
+                call_data = current_tool_calls[call_key]
+                call_data["arguments"] += delta
+                yield ToolCallDelta(index=call_data["index"], arguments_delta=delta)
+
+            elif event_type == "response.function_call_arguments.done":
+                final_args = event.get("arguments")
+                if not isinstance(final_args, str):
+                    continue
+                event_item_id = event.get("item_id")
+                if isinstance(event_item_id, str) and event_item_id:
+                    call_key = call_key_by_item_id.get(event_item_id)
+                else:
+                    call_key = last_tool_call_id
+                if not call_key or call_key not in current_tool_calls:
+                    continue
+                call_data = current_tool_calls[call_key]
+                delta_part = _reconcile(call_data, final_args)
+                if delta_part is not None:
+                    yield delta_part
+
+            elif event_type == "response.output_item.done":
+                item = event.get("item")
+                if not isinstance(item, dict) or item.get("type") != "function_call":
+                    continue
+                final_args = item.get("arguments")
+                if not isinstance(final_args, str):
+                    continue
+                call_id_field = item.get("call_id")
+                item_id_field = item.get("id")
+                composite = None
+                if isinstance(call_id_field, str) and isinstance(item_id_field, str):
+                    composite = f"{call_id_field}|{item_id_field}"
+                if composite is not None and composite in current_tool_calls:
+                    call_key = composite
+                elif isinstance(item_id_field, str) and item_id_field:
+                    call_key = call_key_by_item_id.get(item_id_field)
+                else:
+                    call_key = last_tool_call_id
+                if not call_key or call_key not in current_tool_calls:
+                    continue
+                call_data = current_tool_calls[call_key]
+                delta_part = _reconcile(call_data, final_args)
+                if delta_part is not None:
+                    yield delta_part
 
             elif event_type in {"response.completed", "response.done", "response.incomplete"}:
                 response_obj = event.get("response")
                 if isinstance(response_obj, dict):
                     self._apply_response_metadata(response_obj, llm_stream)
-                    stop_reason = self._map_stop_reason(response_obj.get("status"))
+                    stop_reason = self._map_stop_reason(response_obj)
                     if current_tool_calls and stop_reason == StopReason.STOP:
                         stop_reason = StopReason.TOOL_USE
                     yield StreamDone(stop_reason=stop_reason)
@@ -324,14 +389,14 @@ class OpenAICodexResponsesProvider(BaseProvider):
         if isinstance(usage, dict):
             input_details = usage.get("input_tokens_details")
             cached = 0
-            cache_write = int(usage.get("cache_write_tokens") or 0)
+            cache_write_value = usage.get("cache_write_tokens")
             if isinstance(input_details, dict):
                 cached = int(input_details.get("cached_tokens") or 0)
-                cache_write = int(
-                    input_details.get("cache_write_tokens")
-                    or input_details.get("cache_creation_tokens")
-                    or cache_write
-                )
+                if "cache_write_tokens" in input_details:
+                    cache_write_value = input_details["cache_write_tokens"]
+                elif "cache_creation_tokens" in input_details:
+                    cache_write_value = input_details["cache_creation_tokens"]
+            cache_write = int(cache_write_value) if cache_write_value is not None else 0
             input_tokens = int(usage.get("input_tokens") or 0)
             non_cached_input = max(input_tokens - cached, 0)
             llm_stream._usage = Usage(
@@ -348,7 +413,9 @@ class OpenAICodexResponsesProvider(BaseProvider):
         self, body: dict[str, Any], headers: dict[str, str]
     ) -> AsyncIterator[dict[str, Any]]:
         last_error: str | None = None
-        timeout = aiohttp.ClientTimeout(total=kon_config.llm.request_timeout_seconds)
+        timeout = aiohttp.ClientTimeout(
+            sock_connect=_CONNECT_TIMEOUT_SECONDS, sock_read=kon_config.llm.request_timeout_seconds
+        )
         async with aiohttp.ClientSession(timeout=timeout) as session:
             response: aiohttp.ClientResponse | None = None
             for attempt in range(_MAX_RETRIES + 1):
@@ -361,7 +428,7 @@ class OpenAICodexResponsesProvider(BaseProvider):
                     delay = _BASE_DELAY_MS * (2**attempt) / 1000
                     await asyncio.sleep(delay)
                     continue
-                raise CodexNonTransportError(last_error)
+                raise CodexNonTransportError(last_error, status=response.status)
 
             if response is None or response.status >= 400:
                 raise CodexNonTransportError(last_error or "Codex request failed after retries")
@@ -372,10 +439,15 @@ class OpenAICodexResponsesProvider(BaseProvider):
     async def _stream_websocket_events(
         self, body: dict[str, Any], headers: dict[str, str]
     ) -> AsyncIterator[dict[str, Any]]:
-        timeout = aiohttp.ClientTimeout(total=kon_config.llm.request_timeout_seconds)
+        timeout = aiohttp.ClientTimeout(
+            sock_connect=_CONNECT_TIMEOUT_SECONDS, sock_read=kon_config.llm.request_timeout_seconds
+        )
+        ws_timeout = aiohttp.ClientWSTimeout(ws_receive=kon_config.llm.request_timeout_seconds)  # type: ignore[call-arg]
         async with (
             aiohttp.ClientSession(timeout=timeout) as session,
-            session.ws_connect(self._resolve_websocket_url(), headers=headers) as ws,
+            session.ws_connect(
+                self._resolve_websocket_url(), headers=headers, heartbeat=20, timeout=ws_timeout
+            ) as ws,
         ):
             await ws.send_json({"type": "response.create", **body})
             saw_completion = False
@@ -405,12 +477,6 @@ class OpenAICodexResponsesProvider(BaseProvider):
                 elif msg.type == aiohttp.WSMsgType.ERROR:
                     error = ws.exception()
                     raise CodexTransportError(str(error) if error else "WebSocket error")
-                elif msg.type in {
-                    aiohttp.WSMsgType.CLOSE,
-                    aiohttp.WSMsgType.CLOSED,
-                    aiohttp.WSMsgType.CLOSING,
-                }:
-                    break
 
             if not saw_completion:
                 raise CodexTransportError("WebSocket stream closed before response.completed")
@@ -436,15 +502,23 @@ class OpenAICodexResponsesProvider(BaseProvider):
                 if isinstance(parsed, dict):
                     yield parsed
 
-    def _map_stop_reason(self, status: Any) -> StopReason:
+    def _map_stop_reason(self, response_obj: dict[str, Any]) -> StopReason:
+        status = response_obj.get("status")
         if status == "completed":
             return StopReason.STOP
         if status == "incomplete":
+            details = response_obj.get("incomplete_details")
+            reason = details.get("reason") if isinstance(details, dict) else None
+            if reason == "content_filter":
+                return StopReason.ERROR
             return StopReason.LENGTH
         if status in {"failed", "cancelled"}:
             return StopReason.ERROR
         return StopReason.STOP
 
     def should_retry_for_error(self, error: Exception) -> bool:
-        msg = str(error).lower()
-        return any(kw in msg for kw in ("429", "rate_limit", "server_error", "502", "503", "504"))
+        if isinstance(error, CodexTransportError):
+            return True
+        if isinstance(error, CodexNonTransportError) and error.status is not None:
+            return _is_retryable_status(error.status)
+        return False

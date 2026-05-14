@@ -1,9 +1,21 @@
 import asyncio
+from collections.abc import AsyncIterator
 
 import pytest
 
 from kon import Config, reset_config, set_config
-from kon.core.types import StopReason, TextContent, UserMessage
+from kon.core.types import (
+    Message,
+    StopReason,
+    StreamDone,
+    StreamPart,
+    TextContent,
+    ToolCall,
+    ToolCallDelta,
+    ToolCallStart,
+    ToolDefinition,
+    UserMessage,
+)
 from kon.events import (
     AgentEndEvent,
     AgentStartEvent,
@@ -16,6 +28,7 @@ from kon.events import (
     ThinkingDeltaEvent,
     ThinkingEndEvent,
     ThinkingStartEvent,
+    ToolArgsDeltaEvent,
     ToolArgsTokenUpdateEvent,
     ToolEndEvent,
     ToolResultEvent,
@@ -24,6 +37,7 @@ from kon.events import (
     TurnStartEvent,
     WarningEvent,
 )
+from kon.llm.base import BaseProvider, LLMStream, ProviderConfig
 from kon.llm.providers.mock import MockProvider
 from kon.loop import Agent
 from kon.session import Session
@@ -44,6 +58,34 @@ def in_memory_session():
 @pytest.fixture
 def sample_messages():
     return [UserMessage(content="Test query")]
+
+
+class StreamPartsProvider(BaseProvider):
+    name = "stream-parts"
+
+    def __init__(self, parts: list[StreamPart]):
+        super().__init__(ProviderConfig(model="stream-parts"))
+        self._parts = parts
+
+    async def _stream_impl(
+        self,
+        messages: list[Message],
+        *,
+        system_prompt: str | None = None,
+        tools: list[ToolDefinition] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> LLMStream:
+        async def iterator() -> AsyncIterator[StreamPart]:
+            for part in self._parts:
+                yield part
+
+        stream = LLMStream()
+        stream.set_iterator(iterator())
+        return stream
+
+    def should_retry_for_error(self, error: Exception) -> bool:
+        return False
 
 
 @pytest.fixture
@@ -489,6 +531,37 @@ async def test_run_single_turn_unknown_tool_scenario(sample_messages, tools):
     content = tool_result.result.content[0]
     assert isinstance(content, TextContent)
     assert "Unknown tool" in content.text
+
+
+@pytest.mark.asyncio
+async def test_run_single_turn_routes_indexed_tool_call_deltas(sample_messages):
+    provider = StreamPartsProvider(
+        [
+            ToolCallStart(id="call_A", name="unknown_a", index=0),
+            ToolCallStart(id="call_B", name="unknown_b", index=1),
+            ToolCallDelta(index=0, arguments_delta='{"bad":'),
+            ToolCallDelta(index=1, arguments_delta='{"y": 2}'),
+            ToolCallDelta(index=0, arguments_delta='{"x": 1}', replace=True),
+            StreamDone(stop_reason=StopReason.TOOL_USE),
+        ]
+    )
+    events = []
+
+    async for event in run_single_turn(provider, sample_messages, [], turn=1):
+        events.append(event)
+
+    arg_deltas = [e for e in events if isinstance(e, ToolArgsDeltaEvent)]
+    assert [e.tool_call_id for e in arg_deltas] == ["call_A", "call_B", "call_A"]
+
+    turn_end = next(e for e in events if isinstance(e, TurnEndEvent))
+    assert turn_end.assistant_message is not None
+    tool_calls = [
+        part for part in turn_end.assistant_message.content if isinstance(part, ToolCall)
+    ]
+    assert [(call.id, call.arguments) for call in tool_calls] == [
+        ("call_A", {"x": 1}),
+        ("call_B", {"y": 2}),
+    ]
 
 
 @pytest.mark.asyncio

@@ -1,6 +1,16 @@
+from collections.abc import AsyncIterator
+from typing import Any
+
 import pytest
 
-from kon.core.types import StreamDone, TextPart
+from kon.core.types import (
+    StopReason,
+    StreamDone,
+    StreamError,
+    TextPart,
+    ToolCallDelta,
+    ToolCallStart,
+)
 from kon.llm.base import LLMStream, ProviderConfig
 from kon.llm.providers.openai_codex_responses import (
     _WS_FALLBACK_SESSIONS,
@@ -8,6 +18,18 @@ from kon.llm.providers.openai_codex_responses import (
     OpenAICodexResponsesProvider,
     _format_provider_error,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_ws_fallback_sessions():
+    _WS_FALLBACK_SESSIONS.clear()
+    yield
+    _WS_FALLBACK_SESSIONS.clear()
+
+
+async def _async_iter(events: list[dict[str, Any]]) -> AsyncIterator[dict[str, Any]]:
+    for event in events:
+        yield event
 
 
 def test_format_provider_error_preserves_non_empty_message():
@@ -46,7 +68,6 @@ async def test_stream_falls_back_to_sse_when_websocket_fails_before_events(monke
     provider = OpenAICodexResponsesProvider(
         ProviderConfig(session_id="session-fallback", model="gpt-5.4")
     )
-    _WS_FALLBACK_SESSIONS.discard("session-fallback")
 
     async def fail_websocket(*args, **kwargs):
         raise CodexTransportError("websocket unavailable")
@@ -77,3 +98,242 @@ async def test_stream_falls_back_to_sse_when_websocket_fails_before_events(monke
     assert parts[0].text == "ok"
     assert isinstance(parts[1], StreamDone)
     assert "session-fallback" in _WS_FALLBACK_SESSIONS
+
+
+@pytest.mark.asyncio
+async def test_stream_emits_stream_error_and_skips_fallback_on_mid_stream_ws_failure(monkeypatch):
+    provider = OpenAICodexResponsesProvider(
+        ProviderConfig(session_id="session-mid", model="gpt-5.4")
+    )
+
+    async def ws_events(*args, **kwargs):
+        yield {"type": "response.output_text.delta", "delta": "hi"}
+        raise CodexTransportError("late failure")
+
+    sse_calls: list[int] = []
+
+    async def sse_events(*args, **kwargs):
+        sse_calls.append(1)
+        if False:
+            yield
+
+    monkeypatch.setattr(provider, "_stream_websocket_events", ws_events)
+    monkeypatch.setattr(provider, "_stream_sse_events", sse_events)
+
+    parts = [
+        part
+        async for part in provider._stream_codex(
+            token="t",
+            account_id="a",
+            messages=[],
+            system_prompt=None,
+            tools=None,
+            temperature=None,
+            max_tokens=None,
+            llm_stream=LLMStream(),
+        )
+    ]
+
+    assert len(parts) == 2
+    assert isinstance(parts[0], TextPart)
+    assert parts[0].text == "hi"
+    assert isinstance(parts[1], StreamError)
+    assert "late failure" in parts[1].error
+    assert sse_calls == []
+    assert "session-mid" not in _WS_FALLBACK_SESSIONS
+
+
+@pytest.mark.asyncio
+async def test_process_codex_events_routes_parallel_function_call_deltas_by_item_id():
+    events: list[dict[str, Any]] = [
+        {
+            "type": "response.output_item.added",
+            "item": {
+                "type": "function_call",
+                "id": "item_A",
+                "call_id": "call_A",
+                "name": "tool_a",
+            },
+        },
+        {
+            "type": "response.output_item.added",
+            "item": {
+                "type": "function_call",
+                "id": "item_B",
+                "call_id": "call_B",
+                "name": "tool_b",
+            },
+        },
+        {"type": "response.function_call_arguments.delta", "item_id": "item_A", "delta": "{"},
+        {"type": "response.function_call_arguments.delta", "item_id": "item_B", "delta": "{"},
+        {"type": "response.function_call_arguments.delta", "item_id": "unknown", "delta": "BAD"},
+        {"type": "response.function_call_arguments.delta", "item_id": "item_A", "delta": '"x":1}'},
+        {"type": "response.function_call_arguments.delta", "item_id": "item_B", "delta": '"y":2}'},
+        {"type": "response.completed", "response": {"status": "completed"}},
+    ]
+
+    provider = OpenAICodexResponsesProvider(ProviderConfig(model="gpt-5.4"))
+    parts = [p async for p in provider._process_codex_events(_async_iter(events), LLMStream())]
+
+    starts = [p for p in parts if isinstance(p, ToolCallStart)]
+    deltas = [p for p in parts if isinstance(p, ToolCallDelta)]
+    done = [p for p in parts if isinstance(p, StreamDone)]
+
+    assert len(starts) == 2
+    assert starts[0].index == 0 and starts[0].name == "tool_a"
+    assert starts[1].index == 1 and starts[1].name == "tool_b"
+
+    assert len(deltas) == 4
+    a_args = "".join(d.arguments_delta for d in deltas if d.index == 0)
+    b_args = "".join(d.arguments_delta for d in deltas if d.index == 1)
+    assert a_args == '{"x":1}'
+    assert b_args == '{"y":2}'
+
+    assert len(done) == 1
+    assert done[0].stop_reason == StopReason.TOOL_USE
+
+
+@pytest.mark.asyncio
+async def test_process_codex_events_done_reconciliation_appends_missing_suffix():
+    events: list[dict[str, Any]] = [
+        {
+            "type": "response.output_item.added",
+            "item": {
+                "type": "function_call",
+                "id": "item_A",
+                "call_id": "call_A",
+                "name": "tool_a",
+            },
+        },
+        {
+            "type": "response.function_call_arguments.delta",
+            "item_id": "item_A",
+            "delta": '{"cmd":"ec',
+        },
+        {
+            "type": "response.function_call_arguments.done",
+            "item_id": "item_A",
+            "arguments": '{"cmd":"echo"}',
+        },
+        {"type": "response.completed", "response": {"status": "completed"}},
+    ]
+
+    provider = OpenAICodexResponsesProvider(ProviderConfig(model="gpt-5.4"))
+    parts = [p async for p in provider._process_codex_events(_async_iter(events), LLMStream())]
+    deltas = [p for p in parts if isinstance(p, ToolCallDelta)]
+
+    assert len(deltas) == 2
+    assert deltas[0].arguments_delta == '{"cmd":"ec'
+    assert deltas[1].arguments_delta == 'ho"}'
+
+
+@pytest.mark.asyncio
+async def test_process_codex_events_output_item_done_reconciles_from_initial_arguments():
+    events: list[dict[str, Any]] = [
+        {
+            "type": "response.output_item.added",
+            "item": {
+                "type": "function_call",
+                "id": "item_A",
+                "call_id": "call_A",
+                "name": "tool_a",
+                "arguments": '{"path":',
+            },
+        },
+        {
+            "type": "response.output_item.done",
+            "item": {
+                "type": "function_call",
+                "id": "item_A",
+                "call_id": "call_A",
+                "name": "tool_a",
+                "arguments": '{"path":"/tmp"}',
+            },
+        },
+        {"type": "response.completed", "response": {"status": "completed"}},
+    ]
+
+    provider = OpenAICodexResponsesProvider(ProviderConfig(model="gpt-5.4"))
+    parts = [p async for p in provider._process_codex_events(_async_iter(events), LLMStream())]
+    deltas = [p for p in parts if isinstance(p, ToolCallDelta)]
+
+    assert len(deltas) == 2
+    assert [d.index for d in deltas] == [0, 0]
+    assert [d.replace for d in deltas] == [False, False]
+    assert "".join(d.arguments_delta for d in deltas) == '{"path":"/tmp"}'
+
+
+@pytest.mark.asyncio
+async def test_process_codex_events_final_arguments_can_replace_partial_arguments():
+    events: list[dict[str, Any]] = [
+        {
+            "type": "response.output_item.added",
+            "item": {
+                "type": "function_call",
+                "id": "item_A",
+                "call_id": "call_A",
+                "name": "tool_a",
+            },
+        },
+        {
+            "type": "response.function_call_arguments.delta",
+            "item_id": "item_A",
+            "delta": '{"broken":',
+        },
+        {
+            "type": "response.function_call_arguments.done",
+            "item_id": "item_A",
+            "arguments": '{"path":"/tmp"}',
+        },
+        {"type": "response.completed", "response": {"status": "completed"}},
+    ]
+
+    provider = OpenAICodexResponsesProvider(ProviderConfig(model="gpt-5.4"))
+    parts = [p async for p in provider._process_codex_events(_async_iter(events), LLMStream())]
+    deltas = [p for p in parts if isinstance(p, ToolCallDelta)]
+
+    assert len(deltas) == 2
+    assert deltas[0].arguments_delta == '{"broken":'
+    assert deltas[0].replace is False
+    assert deltas[1].arguments_delta == '{"path":"/tmp"}'
+    assert deltas[1].replace is True
+
+
+@pytest.mark.asyncio
+async def test_incomplete_response_with_content_filter_maps_to_stop_reason_error():
+    events: list[dict[str, Any]] = [
+        {
+            "type": "response.incomplete",
+            "response": {
+                "status": "incomplete",
+                "incomplete_details": {"reason": "content_filter"},
+            },
+        }
+    ]
+
+    provider = OpenAICodexResponsesProvider(ProviderConfig(model="gpt-5.4"))
+    parts = [p async for p in provider._process_codex_events(_async_iter(events), LLMStream())]
+    done = [p for p in parts if isinstance(p, StreamDone)]
+
+    assert len(done) == 1
+    assert done[0].stop_reason == StopReason.ERROR
+
+
+def test_apply_response_metadata_preserves_zero_cache_write_tokens():
+    provider = OpenAICodexResponsesProvider(ProviderConfig(model="gpt-5.4"))
+    llm_stream = LLMStream()
+    response_obj = {
+        "usage": {
+            "input_tokens": 100,
+            "output_tokens": 50,
+            "cache_write_tokens": 7,
+            "input_tokens_details": {
+                "cached_tokens": 0,
+                "cache_write_tokens": 0,
+                "cache_creation_tokens": 9,
+            },
+        }
+    }
+    provider._apply_response_metadata(response_obj, llm_stream)
+    assert llm_stream._usage is not None
+    assert llm_stream._usage.cache_write_tokens == 0

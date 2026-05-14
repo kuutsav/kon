@@ -66,6 +66,7 @@ class ToolCallDelta(BaseModel):
     type: Literal["tool_call_delta"] = "tool_call_delta"
     index: int  # Correlates with ToolCallStart.index
     arguments_delta: str
+    replace: bool = False
 
 
 class StreamDone(BaseModel):

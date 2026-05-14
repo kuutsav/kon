@@ -304,18 +304,17 @@ async def run_single_turn(
 
     # Collect tool calls during streaming, execute after stream completes
     pending_tool_calls: list[dict] = []
-    current_tool_call: dict | None = None
+    active_tool_calls: dict[int, dict] = {}
 
     # Token counting for tool argument streaming
-    _tool_arg_chunk_counter = 0
-    _tool_arg_token_count = 0
+    tool_arg_counters: dict[int, tuple[int, int]] = {}
 
     current_state: StreamState | None = None
     stop_reason: StopReason = StopReason.STOP
     interrupted = False
 
     def _finalize_current_state(include_empty: bool = True) -> list[StreamEvent]:
-        nonlocal current_state, current_tool_call, think_buffer, think_signature, text_buffer
+        nonlocal current_state, think_buffer, think_signature, text_buffer
 
         events: list[StreamEvent] = []
 
@@ -332,9 +331,10 @@ async def run_single_turn(
                 content.append(TextContent(text=full_text))
                 events.append(TextEndEvent(text=full_text))
             text_buffer = []
-        elif current_state == StreamState.TOOL_CALL and current_tool_call:
-            pending_tool_calls.append(current_tool_call)
-            current_tool_call = None
+        elif current_state == StreamState.TOOL_CALL and active_tool_calls:
+            pending_tool_calls.extend(active_tool_calls.values())
+            active_tool_calls.clear()
+            tool_arg_counters.clear()
 
         current_state = None
         return events
@@ -461,18 +461,11 @@ async def run_single_turn(
 
                 yield TextDeltaEvent(delta=t)
 
-            case ToolCallStart(id=id, name=name, arguments=initial_arguments):
+            case ToolCallStart(id=id, name=name, index=index, arguments=initial_arguments):
                 tool_call_count += 1
                 if current_state and current_state != StreamState.TOOL_CALL:
                     for finalize_event in _finalize_current_state():
                         yield finalize_event
-                elif current_state == StreamState.TOOL_CALL and current_tool_call:
-                    pending_tool_calls.append(current_tool_call)
-                    current_tool_call = None
-
-                # Reset token counters when starting a new tool call
-                _tool_arg_chunk_counter = 0
-                _tool_arg_token_count = 0
 
                 initial_arguments_json = ""
                 if initial_arguments:
@@ -482,7 +475,7 @@ async def run_single_turn(
                         initial_arguments_json = ""
 
                 current_state = StreamState.TOOL_CALL
-                current_tool_call = {
+                active_tool_calls[index] = {
                     "id": id,
                     "name": name,
                     "arguments": initial_arguments_json,
@@ -491,23 +484,30 @@ async def run_single_turn(
 
                 yield ToolStartEvent(tool_call_id=id, tool_name=name)
 
-            case ToolCallDelta(arguments_delta=delta):
-                if current_tool_call:
-                    current_tool_call["arguments"] += delta
-                    yield ToolArgsDeltaEvent(tool_call_id=current_tool_call["id"], delta=delta)
+            case ToolCallDelta(index=index, arguments_delta=delta, replace=replace):
+                tool_call = active_tool_calls.get(index)
+                if tool_call:
+                    if replace:
+                        tool_call["arguments"] = delta
+                        chunk_count, token_count = 0, 0
+                    else:
+                        tool_call["arguments"] += delta
+                        chunk_count, token_count = tool_arg_counters.get(index, (0, 0))
+                    yield ToolArgsDeltaEvent(tool_call_id=tool_call["id"], delta=delta)
 
                     # Count tokens and fire update event every Nth chunk after threshold tokens
-                    _tool_arg_chunk_counter += 1
-                    _tool_arg_token_count += _count_tokens(delta)
+                    chunk_count += 1
+                    token_count += _count_tokens(delta)
+                    tool_arg_counters[index] = (chunk_count, token_count)
 
                     if (
-                        _tool_arg_token_count > _TOOL_ARGS_TOKEN_DISPLAY_THRESHOLD
-                        and _tool_arg_chunk_counter % _TOOL_ARGS_TOKEN_CHUNK_UPDATE_INTERVAL == 0
+                        token_count > _TOOL_ARGS_TOKEN_DISPLAY_THRESHOLD
+                        and chunk_count % _TOOL_ARGS_TOKEN_CHUNK_UPDATE_INTERVAL == 0
                     ):
                         yield ToolArgsTokenUpdateEvent(
-                            tool_call_id=current_tool_call["id"],
-                            tool_name=current_tool_call["name"],
-                            token_count=_tool_arg_token_count,
+                            tool_call_id=tool_call["id"],
+                            tool_name=tool_call["name"],
+                            token_count=token_count,
                         )
 
             case StreamDone(stop_reason=reason):

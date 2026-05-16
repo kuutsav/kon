@@ -204,24 +204,26 @@ class ChatLog(VerticalScroll):
 
         shortcut_rows = (
             (
-                ("/", "commands"),
+                ("/", "slash commands"),
                 ("@", "files/dirs"),
                 ("tab", "complete paths"),
                 ("↑/↓", "history"),
-                ("shift+tab", "permissions"),
             ),
             (
+                ("shift+tab", "permissions"),
                 ("esc", "to interrupt"),
                 ("shift+enter", "add newline"),
-                ("ctrl+c", "clear the input"),
-                ("ctrl+c x2", "exit"),
             ),
             (
+                ("ctrl+c", "clear input"),
+                ("ctrl+c x2", "exit"),
                 ("enter", "queue"),
                 ("alt+enter", "steer"),
+            ),
+            (
                 ("↑/↓", "select queue"),
-                ("ctrl+t", "toggle thinking"),
-                ("ctrl+shift+t", "cycle thinking"),
+                ("ctrl+t", "cycle thinking"),
+                ("ctrl+shift+t", "toggle thinking"),
             ),
         )
 
@@ -362,12 +364,12 @@ class ChatLog(VerticalScroll):
             ("/", "Slash commands (at start of input)"),
             ("escape", "Cancel completion / interrupt agent"),
             ("ctrl+c", "Clear input (press twice to quit)"),
-            ("ctrl+t", "Toggle thinking visibility"),
+            ("ctrl+t", "Cycle thinking levels"),
             ("ctrl+o", "Toggle tool output expansion"),
             ("↑/↓ on queue", "Select queued messages"),
             ("enter on queue", "Edit selected queued message"),
             ("ctrl+d on queue", "Delete selected queued message"),
-            ("ctrl+shift+t", "Cycle thinking levels"),
+            ("ctrl+shift+t", "Toggle thinking visibility"),
             ("shift+tab", "Cycle permission mode"),
         ]
         _append_aligned_section(text, "Keybindings", keybindings, **colors)

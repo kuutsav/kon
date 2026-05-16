@@ -101,9 +101,9 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         ("ctrl+c", "handle_ctrl_c", "Clear"),
         Binding("ctrl+d", "handle_ctrl_d", "Delete session", priority=True),
         ("escape", "interrupt_agent", "Interrupt"),
-        ("ctrl+t", "toggle_thinking", "Toggle thinking"),
+        ("ctrl+t", "cycle_thinking_level", "Cycle thinking level"),
         Binding("ctrl+o", "toggle_tool_output", "Toggle tool output", priority=True),
-        Binding("ctrl+shift+t", "cycle_thinking_level", "Cycle thinking level", priority=True),
+        Binding("ctrl+shift+t", "toggle_thinking", "Toggle thinking", priority=True),
         Binding("shift+tab", "cycle_permission_mode", "Cycle permission mode", priority=True),
     ]
 

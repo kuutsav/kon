@@ -10,14 +10,14 @@ def _capture_updates(block):
     return updates
 
 
-def test_content_block_previews_partial_line_with_cursor():
+def test_content_block_previews_partial_line_without_cursor():
     block = ContentBlock()
     updates = _capture_updates(block)
 
     block._append_streaming("hello")
 
     assert updates
-    assert updates[-1].plain == "hello▌"
+    assert updates[-1].plain == "hello"
 
 
 def test_content_block_commits_completed_lines_and_keeps_tail_live():
@@ -28,10 +28,10 @@ def test_content_block_commits_completed_lines_and_keeps_tail_live():
 
     assert updates
     assert "hello" in updates[-1].plain
-    assert updates[-1].plain.endswith("wor▌")
+    assert updates[-1].plain.endswith("wor")
 
 
-def test_content_block_flush_removes_live_cursor():
+def test_content_block_flush_finalizes_display():
     block = ContentBlock()
 
     block._append_streaming("hello")
@@ -55,7 +55,7 @@ def test_streaming_update_is_coalesced_until_refresh():
 
     callbacks[0]()
 
-    assert updates[-1].plain == "ab▌"
+    assert updates[-1].plain == "ab"
 
 
 def test_thinking_block_pending_preview_is_dim_and_italic():
@@ -64,6 +64,6 @@ def test_thinking_block_pending_preview_is_dim_and_italic():
 
     block._append_streaming("thinking")
 
-    assert updates[-1].plain == "thinking▌"
+    assert updates[-1].plain == "thinking"
     assert updates[-1].spans[0].style is not None
     assert "italic" in str(updates[-1].spans[0].style)

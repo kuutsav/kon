@@ -41,8 +41,8 @@ class _StreamingMarkdownMixin:
 
     Completed lines are committed through Kon's Rich markdown formatter so block-level
     structure stays stable. The current unfinished line is rendered as a plain-text
-    tail with a small cursor, then coalesced into the next refresh frame so fast
-    token streams don't trigger one layout pass per token.
+    tail, then coalesced into the next refresh frame so fast token streams don't
+    trigger one layout pass per token.
     """
 
     _pending: str
@@ -78,10 +78,13 @@ class _StreamingMarkdownMixin:
                 display.append("\n")
             display.append(self._pending, style=self._streaming_pending_style())
 
-        if not self._stream_finalized:
-            if completed_needs_separator and not self._pending and display.plain:
-                display.append("\n")
-            display.append("▌", style=f"{config.ui.colors.dim} blink")
+        if (
+            not self._stream_finalized
+            and completed_needs_separator
+            and not self._pending
+            and display.plain
+        ):
+            display.append("\n")
 
         return display
 

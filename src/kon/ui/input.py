@@ -434,6 +434,11 @@ class InputBox(Vertical):
 
     def action_cancel(self) -> None:
         if self._is_completing:
+            if getattr(self.app, "_selection_mode", None) == "tree":
+                selector = self.app.query_one("#tree-selector")
+                if hasattr(selector, "action_cancel"):
+                    selector.action_cancel()
+                return
             self._is_completing = False
             self._active_provider = None
             self._completion_prefix = ""

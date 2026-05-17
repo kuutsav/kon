@@ -81,7 +81,7 @@ class SessionUIMixin:
         chat = self.query_one("#chat-log", ChatLog)
         started_tools: set[str] = set()
 
-        for entry in session.entries:
+        for entry in session.active_entries:
             if isinstance(entry, MessageEntry):
                 message = entry.message
                 if isinstance(message, UserMessage):

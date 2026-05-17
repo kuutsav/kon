@@ -11,3 +11,4 @@ class SelectionMode(StrEnum):
     THINKING = "thinking"
     NOTIFICATIONS = "notifications"
     SETTINGS = "settings"
+    TREE = "tree"

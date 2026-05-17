@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .core.compaction import generate_summary
 from .core.handoff import generate_handoff_prompt
-from .core.types import AssistantMessage
+from .core.types import AssistantMessage, TextContent, UserMessage
 from .llm import (
     ApiType,
     BaseProvider,
@@ -21,7 +21,7 @@ from .llm import (
 )
 from .llm.base import AuthMode
 from .loop import Agent, build_system_prompt
-from .session import MessageEntry, Session
+from .session import CustomMessageEntry, MessageEntry, Session
 from .tools import BaseTool
 
 _COPILOT_API_TYPES: frozenset[ApiType] = frozenset(
@@ -59,6 +59,11 @@ class HandoffResult:
     prompt: str
     source_session: Session
     new_session: Session
+
+
+@dataclass
+class TreeNavigationResult:
+    editor_text: str | None = None
 
 
 class ConversationRuntime:
@@ -381,6 +386,34 @@ class ConversationRuntime:
 
         return session
 
+    def navigate_tree(self, entry_id: str) -> TreeNavigationResult:
+        if self.session is None:
+            raise RuntimeError("Agent not initialized")
+        entry = self.session.get_entry(entry_id)
+        if entry is None:
+            raise ValueError(f"Entry not found: {entry_id}")
+
+        editor_text: str | None = None
+        if isinstance(entry, MessageEntry) and isinstance(entry.message, UserMessage):
+            self.session.move_to(entry.parent_id)
+            content = entry.message.content
+            if isinstance(content, str):
+                editor_text = content
+            else:
+                editor_text = "".join(
+                    part.text for part in content if isinstance(part, TextContent)
+                )
+        elif isinstance(entry, CustomMessageEntry):
+            self.session.move_to(entry.parent_id)
+            editor_text = entry.content
+        else:
+            self.session.move_to(entry_id)
+
+        if self.agent is not None:
+            self.agent.session = self.session
+        self._sync_provider_session_id()
+        return TreeNavigationResult(editor_text=editor_text)
+
     def prepare_for_run(self) -> Agent | None:
         if self.provider is None or self.session is None:
             return None
@@ -402,7 +435,7 @@ class ConversationRuntime:
     def latest_assistant_usage_tokens(self) -> int:
         if self.session is None:
             return 0
-        for entry in reversed(self.session.entries):
+        for entry in reversed(self.session.active_entries):
             if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
                 usage = entry.message.usage
                 if usage is None:

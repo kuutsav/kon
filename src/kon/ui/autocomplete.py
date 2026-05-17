@@ -367,6 +367,7 @@ DEFAULT_COMMANDS = [
     SlashCommand("new", "start new conversation"),
     SlashCommand("handoff", "start focused handoff in new session", submit_on_select=False),
     SlashCommand("resume", "resume a session"),
+    SlashCommand("tree", "navigate session tree"),
     SlashCommand("session", "show session info and stats"),
     SlashCommand("login", "login to a provider"),
     SlashCommand("logout", "logout from a provider"),

@@ -23,6 +23,7 @@ from .clipboard import copy_to_clipboard
 from .floating_list import FloatingList, ListItem
 from .input import InputBox
 from .selection_mode import SelectionMode
+from .tree import TreeSelector
 from .widgets import InfoBar, StatusLine, format_path
 
 if TYPE_CHECKING:
@@ -105,6 +106,9 @@ class CommandsMixin:
             return True
         if cmd == "resume":
             self._show_resume_sessions()
+            return True
+        if cmd == "tree":
+            self._show_tree_selector()
             return True
         if cmd == "session":
             self._show_session_info()
@@ -590,6 +594,27 @@ class CommandsMixin:
             _walk(root, 0)
 
         return items
+
+    def _show_tree_selector(self) -> None:
+        chat = self.query_one("#chat-log", ChatLog)
+        input_box = self.query_one("#input-box", InputBox)
+        if self._is_running:
+            chat.add_info_message("Cannot open tree while agent is running", error=True)
+            return
+        if not self._runtime.session or not self._runtime.session.all_entries:
+            chat.add_info_message("No entries in session")
+            return
+        tree = self._runtime.session.get_tree()
+        selector = self.query_one("#tree-selector", TreeSelector)
+        input_box.clear()
+        input_box.set_autocomplete_enabled(False)
+        input_box.set_completing(True)
+        selector.show(
+            tree,
+            self._runtime.session.leaf_id,
+            getattr(self, "size", None).height if getattr(self, "size", None) else 24,
+        )
+        self._selection_mode = SelectionMode.TREE
 
     def _show_resume_sessions(self) -> None:
         items = self._build_resume_items()

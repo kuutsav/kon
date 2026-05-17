@@ -65,6 +65,7 @@ from .input import InputBox
 from .selection_mode import SelectionMode
 from .session_ui import SessionUIMixin
 from .styles import get_styles
+from .tree import TreeSelector
 from .widgets import InfoBar, QueueDisplay, StatusLine, format_path
 
 
@@ -101,6 +102,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         ("ctrl+c", "handle_ctrl_c", "Clear"),
         Binding("ctrl+d", "handle_ctrl_d", "Delete session", priority=True),
         ("escape", "interrupt_agent", "Interrupt"),
+        Binding("left", "tree_page_up", "Tree page up", priority=True),
+        Binding("right", "tree_page_down", "Tree page down", priority=True),
         ("ctrl+t", "cycle_thinking_level", "Cycle thinking level"),
         Binding("ctrl+o", "toggle_tool_output", "Toggle tool output", priority=True),
         Binding("ctrl+shift+t", "toggle_thinking", "Toggle thinking", priority=True),
@@ -212,6 +215,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         yield StatusLine(id="status-line")
         yield InputBox(cwd=self._cwd, id="input-box")
         yield FloatingList(window_size=5, label_width=12, id="completion-list")
+        yield TreeSelector(id="tree-selector")
         yield InfoBar(
             cwd=self._cwd,
             model=self._runtime.model,
@@ -521,8 +525,11 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
     @on(InputBox.CompletionSelect)
     def on_completion_select(self, event: InputBox.CompletionSelect) -> None:
-        completion_list = self.query_one("#completion-list", FloatingList)
         input_box = self.query_one("#input-box", InputBox)
+        if self._selection_mode == SelectionMode.TREE:
+            self.query_one("#tree-selector", TreeSelector).action_select()
+            return
+        completion_list = self.query_one("#completion-list", FloatingList)
         item = completion_list.selected_item
 
         if not item:
@@ -546,6 +553,8 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
                     self._handle_settings_select(item.value)
                 case SelectionMode.SESSION:
                     self.run_worker(self._load_session(item.value.path), exclusive=True)
+                case SelectionMode.TREE:
+                    pass
                 case SelectionMode.MODEL:
                     self._select_model(item.value)
                 case SelectionMode.THEME:
@@ -586,7 +595,7 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
 
     @on(InputBox.SearchUpdate)
     def on_search_update(self, event: InputBox.SearchUpdate) -> None:
-        if self._selection_mode is None:
+        if self._selection_mode is None or self._selection_mode == SelectionMode.TREE:
             return
         completion_list = self.query_one("#completion-list", FloatingList)
         completion_list.set_search_query(event.query)
@@ -597,8 +606,68 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
         ):
             completion_list.select_value(self._settings_selected_value)
 
+    @on(TreeSelector.Selected)
+    async def on_tree_selected(self, event: TreeSelector.Selected) -> None:
+        selector = self.query_one("#tree-selector", TreeSelector)
+        input_box = self.query_one("#input-box", InputBox)
+        chat = self.query_one("#chat-log", ChatLog)
+        info_bar = self.query_one("#info-bar", InfoBar)
+        status = self.query_one("#status-line", StatusLine)
+        try:
+            result = self._runtime.navigate_tree(event.entry_id)
+        except Exception as exc:
+            chat.add_info_message(f"Tree navigation failed: {exc}", error=True)
+            return
+        selector.hide()
+        self._selection_mode = None
+        input_box.set_autocomplete_enabled(True)
+        input_box.set_completing(False)
+        await chat.remove_all_children()
+        chat.add_session_info(getattr(self, "VERSION", ""))
+        if self._runtime.agent:
+            chat.add_loaded_resources(
+                context_paths=[
+                    format_path(f.path) for f in self._runtime.agent.context.agents_files
+                ],
+                skills=self._runtime.agent.context.skills,
+                tools=self._runtime.tools,
+            )
+        if self._runtime.session:
+            self._render_session_entries(self._runtime.session)
+            totals = self._runtime.session.token_totals()
+            info_bar.set_tokens(
+                totals.input_tokens,
+                totals.output_tokens,
+                totals.context_tokens,
+                totals.cache_read_tokens,
+                totals.cache_write_tokens,
+            )
+            info_bar.set_file_changes(self._runtime.session.file_changes_summary())
+        status.reset()
+        if result.editor_text and not input_box.text.strip():
+            input_box.insert(result.editor_text)
+        chat.show_status("Navigated to selected point")
+        input_box.focus()
+
+    @on(TreeSelector.Cancelled)
+    def on_tree_cancelled(self, event: TreeSelector.Cancelled) -> None:
+        selector = self.query_one("#tree-selector", TreeSelector)
+        input_box = self.query_one("#input-box", InputBox)
+        selector.hide()
+        self._selection_mode = None
+        input_box.set_autocomplete_enabled(True)
+        input_box.set_completing(False)
+        input_box.focus()
+
     @on(InputBox.CompletionMove)
     def on_completion_move(self, event: InputBox.CompletionMove) -> None:
+        if self._selection_mode == SelectionMode.TREE:
+            selector = self.query_one("#tree-selector", TreeSelector)
+            if event.direction < 0:
+                selector.action_move_up()
+            else:
+                selector.action_move_down()
+            return
         completion_list = self.query_one("#completion-list", FloatingList)
         if event.direction < 0:
             completion_list.move_up()
@@ -662,7 +731,18 @@ class Kon(CommandsMixin, SessionUIMixin, App[None]):
             self._ctrl_d_threshold, lambda: status.hide_exit_hint()
         )
 
+    def action_tree_page_up(self) -> None:
+        if self._selection_mode == SelectionMode.TREE:
+            self.query_one("#tree-selector", TreeSelector).action_page_up()
+
+    def action_tree_page_down(self) -> None:
+        if self._selection_mode == SelectionMode.TREE:
+            self.query_one("#tree-selector", TreeSelector).action_page_down()
+
     def action_interrupt_agent(self) -> None:
+        if self._selection_mode == SelectionMode.TREE:
+            self.query_one("#tree-selector", TreeSelector).action_cancel()
+            return
         if self._is_running:
             self._request_interrupt()
 

@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 import re
 import uuid
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Literal
@@ -99,6 +99,11 @@ class SessionInfoEntry(EntryBase):
     name: str | None = None
 
 
+class LeafEntry(EntryBase):
+    type: Literal["leaf"] = "leaf"
+    target_id: str | None = None
+
+
 SessionEntry = (
     MessageEntry
     | ThinkingLevelChangeEntry
@@ -106,7 +111,14 @@ SessionEntry = (
     | CompactionEntry
     | CustomMessageEntry
     | SessionInfoEntry
+    | LeafEntry
 )
+
+
+@dataclass
+class TreeNode:
+    entry: SessionEntry
+    children: list[TreeNode] = field(default_factory=list)
 
 
 class SessionInfo(BaseModel):
@@ -252,7 +264,7 @@ class Session:
     def _append_entry(self, entry: SessionEntry) -> None:
         self._entries.append(entry)
         self._by_id[entry.id] = entry
-        self._leaf_id = entry.id
+        self._leaf_id = entry.target_id if isinstance(entry, LeafEntry) else entry.id
         self._persist_entry(entry)
 
     def _persist_entry(self, entry: SessionEntry) -> None:
@@ -261,7 +273,7 @@ class Session:
 
         has_assistant = any(
             isinstance(e, MessageEntry) and e.message.role == "assistant" for e in self._entries
-        )
+        ) or isinstance(entry, LeafEntry)
         if not has_assistant:
             return
 
@@ -380,9 +392,55 @@ class Session:
         self._append_entry(entry)
         return entry.id
 
+    def move_to(self, entry_id: str | None) -> None:
+        if entry_id is not None and entry_id not in self._by_id:
+            raise ValueError(f"Entry not found: {entry_id}")
+        entry = LeafEntry(
+            id=self._generate_entry_id(),
+            parent_id=self._leaf_id,
+            timestamp=_now_iso(),
+            target_id=entry_id,
+        )
+        self._append_entry(entry)
+
     @property
     def entries(self) -> list[SessionEntry]:
+        return self.active_entries
+
+    @property
+    def all_entries(self) -> list[SessionEntry]:
         return list(self._entries)
+
+    def get_branch(self, leaf_id: str | None = None) -> list[SessionEntry]:
+        path: list[SessionEntry] = []
+        current_id = self._leaf_id if leaf_id is None else leaf_id
+        while current_id:
+            entry = self._by_id.get(current_id)
+            if entry is None:
+                break
+            path.append(entry)
+            current_id = entry.parent_id
+        path.reverse()
+        return path
+
+    @property
+    def active_entries(self) -> list[SessionEntry]:
+        return self.get_branch()
+
+    def get_tree(self) -> list[TreeNode]:
+        tree_entries = [entry for entry in self._entries if not isinstance(entry, LeafEntry)]
+        nodes = {entry.id: TreeNode(entry=entry) for entry in tree_entries}
+        roots: list[TreeNode] = []
+        for entry in tree_entries:
+            node = nodes[entry.id]
+            if entry.parent_id is None or entry.parent_id not in nodes:
+                roots.append(node)
+            else:
+                nodes[entry.parent_id].children.append(node)
+        for node in nodes.values():
+            node.children.sort(key=lambda child: child.entry.timestamp)
+        roots.sort(key=lambda node: node.entry.timestamp)
+        return roots
 
     def get_entry(self, entry_id: str) -> SessionEntry | None:
         return self._by_id.get(entry_id)
@@ -391,13 +449,13 @@ class Session:
     def messages(self) -> list[Message]:
         """Messages for LLM context. If compaction exists, returns compacted view."""
         last_compaction: CompactionEntry | None = None
-        for entry in reversed(self._entries):
+        for entry in reversed(self.active_entries):
             if isinstance(entry, CompactionEntry):
                 last_compaction = entry
                 break
 
         if last_compaction is None:
-            return [e.message for e in self._entries if isinstance(e, MessageEntry)]
+            return [e.message for e in self.active_entries if isinstance(e, MessageEntry)]
 
         # Build compacted message list:
         # 1. Synthetic user message asking "what did we do so far?"
@@ -412,7 +470,7 @@ class Session:
 
         # Find the compaction entry's position and include messages after it
         past_compaction = False
-        for entry in self._entries:
+        for entry in self.active_entries:
             if isinstance(entry, CompactionEntry) and entry.id == last_compaction.id:
                 past_compaction = True
                 continue
@@ -424,7 +482,7 @@ class Session:
     @property
     def all_messages(self) -> list[Message]:
         """All messages regardless of compaction (for UI rendering)."""
-        return [e.message for e in self._entries if isinstance(e, MessageEntry)]
+        return [e.message for e in self.active_entries if isinstance(e, MessageEntry)]
 
     def get_last_assistant_text(self) -> str | None:
         for message in reversed(self.messages):
@@ -447,7 +505,7 @@ class Session:
         cache_write_tokens = 0
         context_tokens = 0
 
-        for entry in self._entries:
+        for entry in self.active_entries:
             if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
                 usage = entry.message.usage
                 if usage is None:
@@ -473,7 +531,7 @@ class Session:
 
     def file_changes_summary(self) -> dict[str, tuple[int, int]]:
         file_changes: dict[str, tuple[int, int]] = {}
-        for entry in self._entries:
+        for entry in self.active_entries:
             if isinstance(entry, MessageEntry) and isinstance(entry.message, ToolResultMessage):
                 fc = entry.message.file_changes
                 if fc:
@@ -487,7 +545,7 @@ class Session:
         tool_calls = 0
         tool_results = 0
 
-        for entry in self._entries:
+        for entry in self.active_entries:
             if not isinstance(entry, MessageEntry):
                 continue
             message = entry.message
@@ -508,21 +566,21 @@ class Session:
 
     @property
     def name(self) -> str | None:
-        for entry in reversed(self._entries):
+        for entry in reversed(self.active_entries):
             if isinstance(entry, SessionInfoEntry) and entry.name:
                 return entry.name
         return None
 
     @property
     def thinking_level(self) -> str:
-        for entry in reversed(self._entries):
+        for entry in reversed(self.active_entries):
             if isinstance(entry, ThinkingLevelChangeEntry):
                 return entry.thinking_level
         return self._initial_thinking_level
 
     @property
     def model(self) -> tuple[str, str, str | None] | None:
-        for entry in reversed(self._entries):
+        for entry in reversed(self.active_entries):
             if isinstance(entry, ModelChangeEntry):
                 return (entry.provider, entry.model_id, entry.base_url)
 
@@ -620,6 +678,8 @@ class Session:
                     entries.append(CustomMessageEntry.model_validate(data))
                 elif entry_type == "session_info":
                     entries.append(SessionInfoEntry.model_validate(data))
+                elif entry_type == "leaf":
+                    entries.append(LeafEntry.model_validate(data))
 
         if not header:
             raise ValueError(f"Invalid session file (no header): {path}")
@@ -634,7 +694,9 @@ class Session:
         session._header = header
         session._entries = entries
         session._by_id = {e.id: e for e in entries}
-        session._leaf_id = entries[-1].id if entries else None
+        session._leaf_id = None
+        for entry in entries:
+            session._leaf_id = entry.target_id if isinstance(entry, LeafEntry) else entry.id
         session._flushed = True  # Already on disk
         session._persisted_entries_count = len(entries)
 

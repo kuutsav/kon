@@ -245,7 +245,7 @@ class Agent:
         # Get the latest assistant message that has usage.
         # The most recent assistant entry can be interrupted/error and have no usage.
         last_usage: Usage | None = None
-        for entry in reversed(self.session.entries):
+        for entry in reversed(self.session.active_entries):
             if isinstance(entry, MessageEntry) and isinstance(entry.message, AssistantMessage):
                 usage = entry.message.usage
                 if usage is None:

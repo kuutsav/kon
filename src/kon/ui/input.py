@@ -371,6 +371,12 @@ class InputBox(Vertical):
     # -------------------------------------------------------------------------
 
     def action_submit(self) -> None:
+        future = getattr(self.app, "_approval_future", None)
+        if future and not future.done() and not self.text:
+            app_on_key = getattr(self.app, "on_key", None)
+            if callable(app_on_key):
+                app_on_key(events.Key("enter", "enter"))
+                return
         if self._is_completing:
             # Tell app to apply the current selection
             self.post_message(self.CompletionSelect())

@@ -569,8 +569,9 @@ class CommandsMixin:
         accent = config.ui.colors.accent
 
         def _walk(node: SessionInfo, depth: int) -> None:
-            # Indent with spaces, single └ connector
-            prefix = "   " * (depth - 1) + " └ " if depth > 0 else ""
+            prefix = ""
+            if depth > 0:
+                prefix = f"{'   ' * (depth - 1)} └ [handoff] "
             label = self._format_session_label(node.first_message)
             caption = f"{self._format_session_age(node.modified)} {node.message_count}"
             items.append(

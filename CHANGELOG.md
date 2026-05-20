@@ -6,6 +6,41 @@ All notable changes to this project will be documented in this file.
 
 - No changes yet.
 
+## 0.3.9 - 2026-05-20
+
+### Added
+
+- Added inline image display from tool results in chat UI.
+- Added tree view for handoff navigation.
+- Added ability to edit queued messages.
+- Added Kanagawa Dragon theme.
+- Added lazy provider loading for faster startup - @Meltedd.
+
+### Changed
+
+- Swapped thinking block keybindings.
+- Grouped preferences under settings.
+- Refreshed startup resource display.
+- Smoother streaming experience.
+- Updated permission mode symbols — single tick for auto, stop icon for prompt.
+- Lowercase slash command descriptions, `L` prefix for queue items.
+- Updated README with ASCII art title, new screenshot, and refined styling.
+
+### Fixed
+
+- Fixed Codex provider event handling, transport, and tracking - @Meltedd.
+- Fixed tool expansion crash on startup - @0xku.
+- Fixed Enter key not submitting permission prompts.
+- Fixed manual shell output expand behavior.
+- Fixed streaming cursor removal.
+- Fixed tool output top padding missing blank line.
+- Fixed tree selector display and empty tree state alignment.
+- Fixed input cursor visibility in light themes.
+- Fixed floating list popup styling.
+- Fixed selected color alignment across themes and solarized-light dim color.
+- Fixed legacy Shift+Enter mapping.
+- Fixed Windows startup warning by delaying textual image import - @sukhbinder.
+
 ## 0.3.8 - 2026-05-08
 
 ### Added
